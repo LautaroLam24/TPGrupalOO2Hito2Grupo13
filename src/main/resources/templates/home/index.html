@@ -28,6 +28,37 @@
   <div sec:authorize="hasRole('ADMIN')" class="alert alert-info">Ingresaste como Administrador.</div>
   <div sec:authorize="hasRole('RESPONSABLE')" class="alert alert-info">Ingresaste como Responsable.</div>
   <div sec:authorize="hasRole('EMPLEADO')" class="alert alert-info">Ingresaste como Empleado.</div>
+
+  <h2 class="h4 mt-5 mb-3">Festivales</h2>
+  <div th:if="${#lists.isEmpty(festivales)}" class="alert alert-warning">
+    Todavía no hay festivales cargados.
+  </div>
+  <div th:unless="${#lists.isEmpty(festivales)}" class="table-responsive">
+    <table class="table table-striped align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Festival</th>
+          <th>Inicio</th>
+          <th>Fin</th>
+          <th>Duración</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="f : ${festivales}">
+          <td th:text="${f.nombre}">Nombre</td>
+          <td th:text="${#temporals.format(f.fechaInicio, 'dd/MM/yyyy')}">01/01/2026</td>
+          <td th:text="${#temporals.format(f.fechaFin, 'dd/MM/yyyy')}">02/01/2026</td>
+          <td th:text="${f.calcularDuracionDias()} + ' días'">1 días</td>
+          <td>
+            <span th:if="${f.estaActivo(#temporals.createToday())}" class="badge bg-success">En curso</span>
+            <span th:if="${!f.estaActivo(#temporals.createToday()) and f.fechaInicio.isAfter(#temporals.createToday())}" class="badge bg-info text-dark">Próximo</span>
+            <span th:if="${!f.estaActivo(#temporals.createToday()) and f.fechaFin.isBefore(#temporals.createToday())}" class="badge bg-secondary">Finalizado</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </main>
 </body>
 </html>
