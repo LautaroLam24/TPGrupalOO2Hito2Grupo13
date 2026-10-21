@@ -23,6 +23,7 @@ public abstract class UnidadDeVenta {
     @Column(nullable = false, length = 100)
     private String nombreComercial;
 
+    @Column(name = "superficie_m2")
     private float superficieM2;
 
     @OneToOne(cascade = CascadeType.ALL, optional = false)
