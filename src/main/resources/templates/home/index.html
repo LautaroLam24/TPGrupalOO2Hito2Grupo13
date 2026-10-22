@@ -28,11 +28,22 @@
   <div sec:authorize="hasRole('ADMIN')" class="alert alert-info">Ingresaste como Administrador.</div>
   <div sec:authorize="hasRole('RESPONSABLE')" class="alert alert-info">Ingresaste como Responsable.</div>
   <div sec:authorize="hasRole('EMPLEADO')" class="alert alert-info">Ingresaste como Empleado.</div>
+
   <div sec:authorize="hasRole('EMPLEADO')" class="mb-4">
     <a class="btn btn-primary" th:href="@{/empleado/liquidacion}">
       Consultar liquidación de sueldo
     </a>
   </div>
+
+  <div sec:authorize="hasRole('RESPONSABLE')"
+       xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+
+    <a class="btn btn-primary" th:href="@{/responsable/empleados/alta}">
+      Alta de empleado
+    </a>
+
+  </div>
+
   <div sec:authorize="isAnonymous()" class="mb-4">
     <a class="btn btn-primary" th:href="@{/registro/unidad}">Registrar unidad de venta</a>
   </div>
