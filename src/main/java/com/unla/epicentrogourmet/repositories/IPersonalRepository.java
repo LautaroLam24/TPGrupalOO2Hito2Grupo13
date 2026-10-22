@@ -8,4 +8,5 @@ import java.util.List;
 public interface IPersonalRepository extends JpaRepository<Personal, Integer> {
     List<Personal> findByBajaFalse();
     List<Personal> findByUserUsernameAndBajaFalse(String username);
+    boolean existsByDni(int dni);
 }
