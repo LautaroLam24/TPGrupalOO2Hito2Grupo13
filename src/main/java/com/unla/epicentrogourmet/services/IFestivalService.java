@@ -7,4 +7,6 @@ import java.util.List;
 public interface IFestivalService {
 
     List<Festival> traerTodos();
+
+    List<Festival> traerDisponibles();
 }

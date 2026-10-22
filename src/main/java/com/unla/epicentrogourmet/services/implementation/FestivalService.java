@@ -5,6 +5,7 @@ import com.unla.epicentrogourmet.repositories.IFestivalRepository;
 import com.unla.epicentrogourmet.services.IFestivalService;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Service("festivalService")
@@ -19,5 +20,10 @@ public class FestivalService implements IFestivalService {
     @Override
     public List<Festival> traerTodos() {
         return festivalRepository.findAll();
+    }
+
+    @Override
+    public List<Festival> traerDisponibles() {
+        return festivalRepository.findByFechaFinGreaterThanEqualOrderByFechaInicioAsc(LocalDate.now());
     }
 }
