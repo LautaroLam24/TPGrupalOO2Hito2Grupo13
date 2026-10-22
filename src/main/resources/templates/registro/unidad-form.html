@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registrar unidad - Epicentro Gourmet</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-dark bg-dark">
+  <div class="container">
+    <a class="navbar-brand" th:href="@{/index}">Epicentro Gourmet</a>
+    <a class="btn btn-outline-light btn-sm" th:href="@{/login}">Ingresar</a>
+  </div>
+</nav>
+
+<main class="container py-5">
+  <div class="mx-auto" style="max-width: 850px;">
+    <div th:if="${mensajeExito != null}" class="alert alert-success" role="alert">
+      <span th:text="${mensajeExito}"></span>
+      <a class="alert-link ms-2" th:href="@{/login}">Iniciar sesión</a>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <h1 class="h3 mb-2">Registrar unidad de venta</h1>
+        <p class="text-muted mb-4">Completá los datos de la unidad y de su responsable.</p>
+
+        <div th:if="${#lists.isEmpty(festivales)}" class="alert alert-warning">
+          No hay festivales futuros o en curso disponibles para registrar una unidad.
+        </div>
+
+        <form th:action="@{/registro/unidad}" th:object="${registroUnidadForm}" method="post" novalidate>
+          <div th:if="${#fields.hasGlobalErrors()}" class="alert alert-danger">
+            <div th:each="error : ${#fields.globalErrors()}" th:text="${error}"></div>
+          </div>
+
+          <h2 class="h5 mb-3">Festival y unidad</h2>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="festivalId" class="form-label">Festival</label>
+              <select id="festivalId" class="form-select" th:field="*{festivalId}"
+                      th:classappend="${#fields.hasErrors('festivalId')} ? 'is-invalid'">
+                <option value="">Seleccionar...</option>
+                <option th:each="festival : ${festivales}"
+                        th:value="${festival.id}"
+                        th:text="${festival.nombre + ' (' + #temporals.format(festival.fechaInicio, 'dd/MM/yyyy') + ' - ' + #temporals.format(festival.fechaFin, 'dd/MM/yyyy') + ')'}">
+                </option>
+              </select>
+              <div class="invalid-feedback" th:errors="*{festivalId}"></div>
+            </div>
+
+            <div class="col-md-6">
+              <label for="tipoUnidad" class="form-label">Tipo de unidad</label>
+              <select id="tipoUnidad" class="form-select" th:field="*{tipoUnidad}"
+                      th:classappend="${#fields.hasErrors('tipoUnidad')} ? 'is-invalid'">
+                <option value="">Seleccionar...</option>
+                <option value="FOOD_TRUCK">Food Truck</option>
+                <option value="PUESTO_DESARMABLE">Puesto Desarmable</option>
+              </select>
+              <div class="invalid-feedback" th:errors="*{tipoUnidad}"></div>
+            </div>
+
+            <div class="col-md-6">
+              <label for="codigo" class="form-label">Código</label>
+              <input id="codigo" type="text" class="form-control text-uppercase" th:field="*{codigo}"
+                     maxlength="10" autocomplete="off"
+                     th:classappend="${#fields.hasErrors('codigo')} ? 'is-invalid'">
+              <div class="form-text">10 caracteres, con al menos una letra y un número.</div>
+              <div class="invalid-feedback" th:errors="*{codigo}"></div>
+            </div>
+
+            <div class="col-md-6">
+              <label for="nombreComercial" class="form-label">Nombre comercial</label>
+              <input id="nombreComercial" type="text" class="form-control" th:field="*{nombreComercial}"
+                     maxlength="100"
+                     th:classappend="${#fields.hasErrors('nombreComercial')} ? 'is-invalid'">
+              <div class="invalid-feedback" th:errors="*{nombreComercial}"></div>
+            </div>
+
+            <div class="col-md-6">
+              <label for="superficieM2" class="form-label">Superficie (m²)</label>
+              <input id="superficieM2" type="number" class="form-control" th:field="*{superficieM2}"
+                     min="0.01" step="0.01"
+                     th:classappend="${#fields.hasErrors('superficieM2')} ? 'is-invalid'">
+              <div class="invalid-feedback" th:errors="*{superficieM2}"></div>
+            </div>
+          </div>
+
+          <fieldset id="camposFoodTruck" class="border rounded p-3 mt-4">
+            <legend class="float-none w-auto px-2 h6">Datos del Food Truck</legend>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label for="patente" class="form-label">Patente</label>
+                <input id="patente" type="text" class="form-control text-uppercase" th:field="*{patente}"
+                       maxlength="10" autocomplete="off"
+                       th:classappend="${#fields.hasErrors('patente')} ? 'is-invalid'">
+                <div class="invalid-feedback" th:errors="*{patente}"></div>
+              </div>
+              <div class="col-md-6 d-flex align-items-end">
+                <div class="form-check mb-2">
+                  <input id="requiereElectricidad" type="checkbox" class="form-check-input"
+                         th:field="*{requiereElectricidad}">
+                  <label for="requiereElectricidad" class="form-check-label">Requiere conexión eléctrica</label>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset id="camposPuesto" class="border rounded p-3 mt-4">
+            <legend class="float-none w-auto px-2 h6">Datos del Puesto Desarmable</legend>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label for="cantCarpas" class="form-label">Cantidad de carpas</label>
+                <input id="cantCarpas" type="number" class="form-control" th:field="*{cantCarpas}"
+                       min="1" step="1"
+                       th:classappend="${#fields.hasErrors('cantCarpas')} ? 'is-invalid'">
+                <div class="invalid-feedback" th:errors="*{cantCarpas}"></div>
+              </div>
+              <div class="col-md-6">
+                <label for="tiempoMontajeMin" class="form-label">Tiempo de montaje (minutos)</label>
+                <input id="tiempoMontajeMin" type="number" class="form-control" th:field="*{tiempoMontajeMin}"
+                       min="0" step="1"
+                       th:classappend="${#fields.hasErrors('tiempoMontajeMin')} ? 'is-invalid'">
+                <div class="invalid-feedback" th:errors="*{tiempoMontajeMin}"></div>
+              </div>
+            </div>
+          </fieldset>
+
+          <h2 class="h5 mt-4 mb-3">Credenciales del responsable</h2>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="username" class="form-label">Email</label>
+              <input id="username" type="email" class="form-control" th:field="*{username}"
+                     maxlength="100" autocomplete="email"
+                     th:classappend="${#fields.hasErrors('username')} ? 'is-invalid'">
+              <div class="invalid-feedback" th:errors="*{username}"></div>
+            </div>
+            <div class="col-md-6">
+              <label for="password" class="form-label">Contraseña</label>
+              <input id="password" name="password" type="password" class="form-control"
+                     autocomplete="new-password"
+                     th:classappend="${#fields.hasErrors('password')} ? 'is-invalid'">
+              <div class="invalid-feedback" th:if="${#fields.hasErrors('password')}" th:errors="*{password}"></div>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary" th:disabled="${#lists.isEmpty(festivales)}">
+              Registrar unidad
+            </button>
+            <a class="btn btn-outline-secondary" th:href="@{/index}">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const selector = document.getElementById('tipoUnidad');
+    const foodTruck = document.getElementById('camposFoodTruck');
+    const puesto = document.getElementById('camposPuesto');
+
+    function alternarCampos() {
+      const esFoodTruck = selector.value === 'FOOD_TRUCK';
+      const esPuesto = selector.value === 'PUESTO_DESARMABLE';
+
+      foodTruck.hidden = !esFoodTruck;
+      puesto.hidden = !esPuesto;
+
+      foodTruck.querySelectorAll('input').forEach(input => input.disabled = !esFoodTruck);
+      puesto.querySelectorAll('input').forEach(input => input.disabled = !esPuesto);
+    }
+
+    selector.addEventListener('change', alternarCampos);
+    alternarCampos();
+  });
+</script>
+</body>
+</html>

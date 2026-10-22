@@ -29,6 +29,10 @@
   <div sec:authorize="hasRole('RESPONSABLE')" class="alert alert-info">Ingresaste como Responsable.</div>
   <div sec:authorize="hasRole('EMPLEADO')" class="alert alert-info">Ingresaste como Empleado.</div>
 
+  <div sec:authorize="isAnonymous()" class="mb-4">
+    <a class="btn btn-primary" th:href="@{/registro/unidad}">Registrar unidad de venta</a>
+  </div>
+
   <h2 class="h4 mt-5 mb-3">Festivales</h2>
   <div th:if="${#lists.isEmpty(festivales)}" class="alert alert-warning">
     Todavía no hay festivales cargados.

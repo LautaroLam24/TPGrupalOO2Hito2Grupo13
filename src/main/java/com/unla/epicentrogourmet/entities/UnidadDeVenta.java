@@ -7,11 +7,15 @@ import lombok.Setter;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 @Entity
 @Inheritance(strategy = InheritanceType.JOINED)
 @Getter @Setter @NoArgsConstructor
 public abstract class UnidadDeVenta {
+
+    private static final Pattern PATRON_CODIGO =
+            Pattern.compile("^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d]{10}$");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -41,6 +45,10 @@ public abstract class UnidadDeVenta {
     @OneToMany
     @JoinColumn(name = "unidad_id")
     private Set<Pedido> pedidos = new HashSet<>();
+
+    public static boolean validarCodigo(String codigo) {
+        return codigo != null && PATRON_CODIGO.matcher(codigo).matches();
+    }
 
     public abstract float calcularCanon(Festival festival);
 }
