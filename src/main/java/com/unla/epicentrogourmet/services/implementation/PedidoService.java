@@ -1,7 +1,9 @@
 package com.unla.epicentrogourmet.services.implementation;
 
 import com.unla.epicentrogourmet.dto.AltaPedidoForm;
+import com.unla.epicentrogourmet.dto.CierreCajaDTO;
 import com.unla.epicentrogourmet.dto.ItemPedidoForm;
+import com.unla.epicentrogourmet.dto.PedidoCierreDTO;
 import com.unla.epicentrogourmet.entities.Cajero;
 import com.unla.epicentrogourmet.entities.Festival;
 import com.unla.epicentrogourmet.entities.ItemPedido;
@@ -11,6 +13,7 @@ import com.unla.epicentrogourmet.entities.Plato;
 import com.unla.epicentrogourmet.entities.RoleName;
 import com.unla.epicentrogourmet.entities.UnidadDeVenta;
 import com.unla.epicentrogourmet.exceptions.AltaPedidoException;
+import com.unla.epicentrogourmet.exceptions.CierreCajaException;
 import com.unla.epicentrogourmet.repositories.IFestivalRepository;
 import com.unla.epicentrogourmet.repositories.IPedidoRepository;
 import com.unla.epicentrogourmet.repositories.IPersonalRepository;
@@ -19,12 +22,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 @Service
 public class PedidoService {
@@ -95,34 +102,58 @@ public class PedidoService {
         return pedidoGuardado;
     }
 
+    @Transactional(readOnly = true)
+    public CierreCajaDTO cierreCaja(String username, Collection<Integer> pedidoIds) {
+        ContextoCajero contexto = obtenerContextoCajero(username, CierreCajaException::new);
+        Set<Integer> idsUnicos = normalizarPedidoIds(pedidoIds);
+
+        if (idsUnicos.isEmpty()) {
+            return construirCierre(contexto, List.of());
+        }
+
+        List<Pedido> pedidos = pedidoRepository.findDeUnidadByIds(
+                contexto.unidad().getId(), idsUnicos);
+        validarPedidosRecuperados(idsUnicos, pedidos);
+
+        List<Pedido> pedidosOrdenados = new ArrayList<>(pedidos);
+        pedidosOrdenados.sort(Comparator.comparingInt(Pedido::getId));
+        return construirCierre(contexto, pedidosOrdenados);
+    }
+
     private ContextoAutorizado obtenerContextoAutorizado(String username, LocalDate fechaActual) {
+        ContextoCajero contexto = obtenerContextoCajero(username, AltaPedidoException::new);
+        Festival festival = obtenerFestivalActivo(contexto.unidad(), fechaActual);
+        return new ContextoAutorizado(contexto.unidad(), festival);
+    }
+
+    private ContextoCajero obtenerContextoCajero(
+            String username,
+            Function<String, ? extends RuntimeException> crearExcepcion) {
         if (username == null || username.isBlank()) {
-            throw new AltaPedidoException("Se requiere un cajero autenticado.");
+            throw crearExcepcion.apply("Se requiere un cajero autenticado.");
         }
 
         List<Personal> coincidencias = personalRepository.findByUserUsernameAndBajaFalse(username);
         if (coincidencias.size() != 1) {
-            throw new AltaPedidoException("No se encontró un empleado activo para el usuario autenticado.");
+            throw crearExcepcion.apply("No se encontró un empleado activo para el usuario autenticado.");
         }
 
         Personal personal = coincidencias.get(0);
         if (!(personal instanceof Cajero cajero)) {
-            throw new AltaPedidoException("El usuario autenticado no es un cajero.");
+            throw crearExcepcion.apply("El usuario autenticado no es un cajero.");
         }
         if (cajero.isBaja()
                 || cajero.getUser() == null
                 || !cajero.getUser().isEnabled()
                 || cajero.getUser().getRole() == null
                 || cajero.getUser().getRole().getRole() != RoleName.ROLE_EMPLEADO) {
-            throw new AltaPedidoException("El cajero autenticado no se encuentra activo o autorizado.");
+            throw crearExcepcion.apply("El cajero autenticado no se encuentra activo o autorizado.");
         }
 
         UnidadDeVenta unidad = unidadDeVentaRepository.findByPersonal(cajero)
-                .orElseThrow(() -> new AltaPedidoException(
+                .orElseThrow(() -> crearExcepcion.apply(
                         "El cajero autenticado no pertenece a una unidad de venta."));
-        Festival festival = obtenerFestivalActivo(unidad, fechaActual);
-
-        return new ContextoAutorizado(unidad, festival);
+        return new ContextoCajero(cajero, unidad);
     }
 
     private Festival obtenerFestivalActivo(UnidadDeVenta unidad, LocalDate fechaActual) {
@@ -177,6 +208,66 @@ public class PedidoService {
         return platos;
     }
 
+    private Set<Integer> normalizarPedidoIds(Collection<Integer> pedidoIds) {
+        if (pedidoIds == null) {
+            throw new CierreCajaException("El seguimiento de pedidos para el cierre es inválido.");
+        }
+
+        Set<Integer> idsUnicos = new LinkedHashSet<>();
+        for (Integer pedidoId : pedidoIds) {
+            if (pedidoId == null || pedidoId <= 0) {
+                throw new CierreCajaException("El seguimiento de pedidos para el cierre es inválido.");
+            }
+            idsUnicos.add(pedidoId);
+        }
+        return idsUnicos;
+    }
+
+    private void validarPedidosRecuperados(Set<Integer> idsEsperados, List<Pedido> pedidos) {
+        if (pedidos == null || pedidos.size() != idsEsperados.size()) {
+            throw pedidosInconsistentes();
+        }
+
+        Set<Integer> idsRecuperados = new HashSet<>();
+        for (Pedido pedido : pedidos) {
+            if (pedido == null || !idsEsperados.contains(pedido.getId())
+                    || !idsRecuperados.add(pedido.getId())) {
+                throw pedidosInconsistentes();
+            }
+        }
+        if (!idsRecuperados.equals(idsEsperados)) {
+            throw pedidosInconsistentes();
+        }
+    }
+
+    private CierreCajaDTO construirCierre(ContextoCajero contexto, List<Pedido> pedidos) {
+        List<PedidoCierreDTO> detalle = pedidos.stream()
+                .map(pedido -> new PedidoCierreDTO(
+                        pedido.getId(), pedido.getFecha(), pedido.getTotal()))
+                .toList();
+        float total = 0f;
+        for (Pedido pedido : pedidos) {
+            total += pedido.getTotal();
+        }
+
+        return new CierreCajaDTO(
+                contexto.unidad().getNombreComercial(),
+                nombreCompleto(contexto.cajero()),
+                LocalDate.now(),
+                detalle.size(),
+                total,
+                detalle);
+    }
+
+    private String nombreCompleto(Cajero cajero) {
+        return (cajero.getNombre() + " " + cajero.getApellido()).trim();
+    }
+
+    private CierreCajaException pedidosInconsistentes() {
+        return new CierreCajaException(
+                "No fue posible validar los pedidos pendientes del cierre.");
+    }
+
     public record ContextoAltaPedido(String unidad, String festival, List<Plato> platos) {
         public ContextoAltaPedido {
             platos = List.copyOf(platos);
@@ -184,5 +275,8 @@ public class PedidoService {
     }
 
     private record ContextoAutorizado(UnidadDeVenta unidad, Festival festival) {
+    }
+
+    private record ContextoCajero(Cajero cajero, UnidadDeVenta unidad) {
     }
 }

@@ -13,8 +13,10 @@ public class ViewRouteHelper {
 
     // PEDIDO
     public static final String PEDIDO_ALTA = "pedido/alta-pedido";
+    public static final String CIERRE_CAJA = "pedido/cierre-caja";
 
     public static final String ROUTE_INDEX = "/index";
     public static final String ROUTE_UNIDAD_REGISTRO = "/registro/unidad";
     public static final String ROUTE_PEDIDO_ALTA = "/empleado/pedidos/nuevo";
+    public static final String ROUTE_CIERRE_CAJA = "/empleado/caja/cierre";
 }
