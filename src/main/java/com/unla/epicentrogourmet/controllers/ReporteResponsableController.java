@@ -1,9 +1,13 @@
 package com.unla.epicentrogourmet.controllers;
 
 import com.unla.epicentrogourmet.dto.PlatoDTO;
+import com.unla.epicentrogourmet.dto.ReporteVentaDTO;
 import com.unla.epicentrogourmet.exceptions.PlatoEstrellaException;
+import com.unla.epicentrogourmet.exceptions.ReporteResponsableException;
 import com.unla.epicentrogourmet.helpers.ViewRouteHelper;
+import com.unla.epicentrogourmet.services.IFestivalService;
 import com.unla.epicentrogourmet.services.implementation.PlatoService;
+import com.unla.epicentrogourmet.services.implementation.ReporteResponsableService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
@@ -20,9 +24,15 @@ import java.util.Optional;
 public class ReporteResponsableController {
 
     private final PlatoService platoService;
+    private final ReporteResponsableService reporteResponsableService;
+    private final IFestivalService festivalService;
 
-    public ReporteResponsableController(PlatoService platoService) {
+    public ReporteResponsableController(PlatoService platoService,
+                                        ReporteResponsableService reporteResponsableService,
+                                        IFestivalService festivalService) {
         this.platoService = platoService;
+        this.reporteResponsableService = reporteResponsableService;
+        this.festivalService = festivalService;
     }
 
     @GetMapping
@@ -60,6 +70,40 @@ public class ReporteResponsableController {
         }
 
         return ViewRouteHelper.PLATO_ESTRELLA;
+    }
+
+    @GetMapping("/recaudacion")
+    public String mostrarRecaudacion(
+            @RequestParam(required = false) Integer festivalId,
+            Authentication authentication,
+            Model model) {
+        String username = nombreUsuario(authentication);
+
+        try {
+            ReporteResponsableService.ContextoReportes contexto =
+                    reporteResponsableService.preparar(username);
+            model.addAttribute("unidad", contexto.unidad());
+            model.addAttribute("festivales", contexto.festivales());
+
+            if (festivalId != null) {
+                model.addAttribute("festivalId", festivalId);
+                contexto.festivales().stream()
+                        .filter(festival -> festival.id() == festivalId)
+                        .findFirst()
+                        .ifPresent(festival -> model.addAttribute("festivalSeleccionado", festival));
+
+                ReporteVentaDTO reporte = festivalService.reporteRecaudacion(username, festivalId);
+                model.addAttribute("consultaRealizada", true);
+                model.addAttribute("reporteVenta", reporte);
+                if (reporte.recaudacionTotal() == 0.0f) {
+                    model.addAttribute("sinRecaudacion", true);
+                }
+            }
+        } catch (ReporteResponsableException ex) {
+            model.addAttribute("error", ex.getMessage());
+        }
+
+        return ViewRouteHelper.RECAUDACION_FESTIVAL;
     }
 
     private String nombreUsuario(Authentication authentication) {
