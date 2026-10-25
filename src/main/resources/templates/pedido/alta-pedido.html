@@ -72,6 +72,7 @@
                         <button type="submit" class="btn btn-primary" th:disabled="${#lists.isEmpty(platos)}">
                             Registrar pedido
                         </button>
+                        <a class="btn btn-warning" th:href="@{/empleado/caja/cierre}">Cerrar caja</a>
                         <a class="btn btn-outline-secondary" th:href="@{/index}">Cancelar</a>
                     </div>
                 </form>
