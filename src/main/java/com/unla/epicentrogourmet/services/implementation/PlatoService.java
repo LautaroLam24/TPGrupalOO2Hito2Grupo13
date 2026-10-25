@@ -2,13 +2,10 @@ package com.unla.epicentrogourmet.services.implementation;
 
 import com.unla.epicentrogourmet.dto.PlatoDTO;
 import com.unla.epicentrogourmet.entities.Festival;
-import com.unla.epicentrogourmet.entities.RoleName;
 import com.unla.epicentrogourmet.entities.UnidadDeVenta;
-import com.unla.epicentrogourmet.entities.User;
 import com.unla.epicentrogourmet.exceptions.PlatoEstrellaException;
-import com.unla.epicentrogourmet.repositories.IFestivalRepository;
+import com.unla.epicentrogourmet.exceptions.ReporteResponsableException;
 import com.unla.epicentrogourmet.repositories.IPedidoRepository;
-import com.unla.epicentrogourmet.repositories.IUnidadDeVentaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,35 +16,43 @@ import java.util.Optional;
 @Service
 public class PlatoService {
 
-    private final IUnidadDeVentaRepository unidadDeVentaRepository;
-    private final IFestivalRepository festivalRepository;
+    private final ReporteResponsableService reporteResponsableService;
     private final IPedidoRepository pedidoRepository;
 
-    public PlatoService(IUnidadDeVentaRepository unidadDeVentaRepository,
-                        IFestivalRepository festivalRepository,
+    public PlatoService(ReporteResponsableService reporteResponsableService,
                         IPedidoRepository pedidoRepository) {
-        this.unidadDeVentaRepository = unidadDeVentaRepository;
-        this.festivalRepository = festivalRepository;
+        this.reporteResponsableService = reporteResponsableService;
         this.pedidoRepository = pedidoRepository;
     }
 
     @Transactional(readOnly = true)
     public ContextoPlatoEstrella preparar(String username) {
-        UnidadDeVenta unidad = obtenerUnidadAutorizada(username);
-        List<FestivalOpcion> festivales = festivalRepository.findByUnidadId(unidad.getId()).stream()
-                .map(this::crearOpcion)
-                .toList();
-
-        return new ContextoPlatoEstrella(unidad.getNombreComercial(), festivales);
+        try {
+            ReporteResponsableService.ContextoReportes contexto =
+                    reporteResponsableService.preparar(username);
+            List<FestivalOpcion> festivales = contexto.festivales().stream()
+                    .map(festival -> new FestivalOpcion(
+                            festival.id(),
+                            festival.nombre(),
+                            festival.fechaInicio(),
+                            festival.fechaFin()))
+                    .toList();
+            return new ContextoPlatoEstrella(contexto.unidad(), festivales);
+        } catch (ReporteResponsableException ex) {
+            throw new PlatoEstrellaException(ex.getMessage());
+        }
     }
 
     @Transactional(readOnly = true)
     public Optional<PlatoDTO> platoEstrella(String username, int festivalId) {
-        UnidadDeVenta unidad = obtenerUnidadAutorizada(username);
-        Festival festival = festivalRepository.findByIdAndUnidadId(festivalId, unidad.getId())
-                .orElseThrow(() -> new PlatoEstrellaException(
-                        "El festival seleccionado no existe o no está asociado a la unidad administrada."));
-        validarFechas(festival);
+        ReporteResponsableService.ContextoFestivalAutorizado contexto;
+        try {
+            contexto = reporteResponsableService.autorizarFestival(username, festivalId);
+        } catch (ReporteResponsableException ex) {
+            throw new PlatoEstrellaException(ex.getMessage());
+        }
+        UnidadDeVenta unidad = contexto.unidad();
+        Festival festival = contexto.festival();
 
         List<Object[]> ranking = pedidoRepository.findRankingPlatosPorPedidos(
                 unidad.getId(), festival.getFechaInicio(), festival.getFechaFin());
@@ -74,55 +79,6 @@ public class PlatoService {
                 nombre,
                 cantidad.intValue(),
                 unidad.getNombreComercial()));
-    }
-
-    private UnidadDeVenta obtenerUnidadAutorizada(String username) {
-        if (username == null || username.isBlank()) {
-            throw new PlatoEstrellaException("Se requiere un responsable autenticado.");
-        }
-
-        List<UnidadDeVenta> unidades = unidadDeVentaRepository.findByResponsableUsername(username);
-        if (unidades == null || unidades.isEmpty()) {
-            throw new PlatoEstrellaException(
-                    "No se encontró una unidad de venta para el responsable autenticado.");
-        }
-        if (unidades.size() != 1) {
-            throw new PlatoEstrellaException(
-                    "La configuración de unidades del responsable autenticado es inconsistente.");
-        }
-
-        UnidadDeVenta unidad = unidades.get(0);
-        User responsable = unidad == null ? null : unidad.getResponsable();
-        if (responsable == null
-                || !username.equals(responsable.getUsername())
-                || !responsable.isEnabled()
-                || responsable.getRole() == null
-                || responsable.getRole().getRole() != RoleName.ROLE_RESPONSABLE) {
-            throw new PlatoEstrellaException(
-                    "El responsable autenticado no se encuentra habilitado o autorizado.");
-        }
-        return unidad;
-    }
-
-    private FestivalOpcion crearOpcion(Festival festival) {
-        if (festival == null) {
-            throw new PlatoEstrellaException(
-                    "No fue posible preparar los festivales de la unidad administrada.");
-        }
-        return new FestivalOpcion(
-                festival.getId(),
-                festival.getNombre(),
-                festival.getFechaInicio(),
-                festival.getFechaFin());
-    }
-
-    private void validarFechas(Festival festival) {
-        LocalDate fechaInicio = festival.getFechaInicio();
-        LocalDate fechaFin = festival.getFechaFin();
-        if (fechaInicio == null || fechaFin == null || fechaInicio.isAfter(fechaFin)) {
-            throw new PlatoEstrellaException(
-                    "El festival seleccionado tiene un intervalo de fechas inválido.");
-        }
     }
 
     private PlatoEstrellaException resultadoInconsistente() {
