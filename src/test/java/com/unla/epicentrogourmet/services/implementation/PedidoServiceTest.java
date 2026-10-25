@@ -1,6 +1,7 @@
 package com.unla.epicentrogourmet.services.implementation;
 
 import com.unla.epicentrogourmet.dto.AltaPedidoForm;
+import com.unla.epicentrogourmet.dto.CierreCajaDTO;
 import com.unla.epicentrogourmet.dto.ItemPedidoForm;
 import com.unla.epicentrogourmet.entities.Cajero;
 import com.unla.epicentrogourmet.entities.EmpleadoCocina;
@@ -13,6 +14,7 @@ import com.unla.epicentrogourmet.entities.RoleName;
 import com.unla.epicentrogourmet.entities.UnidadDeVenta;
 import com.unla.epicentrogourmet.entities.User;
 import com.unla.epicentrogourmet.exceptions.AltaPedidoException;
+import com.unla.epicentrogourmet.exceptions.CierreCajaException;
 import com.unla.epicentrogourmet.repositories.IFestivalRepository;
 import com.unla.epicentrogourmet.repositories.IPedidoRepository;
 import com.unla.epicentrogourmet.repositories.IPersonalRepository;
@@ -27,6 +29,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -71,6 +74,8 @@ class PedidoServiceTest {
                 pedidoRepository);
 
         cajero = cajeroActivo(USERNAME);
+        cajero.setNombre("Ana");
+        cajero.setApellido("Pérez");
         unidad = new FoodTruck();
         unidad.setId(10);
         unidad.setNombreComercial("Ruedas de Fuego");
@@ -321,10 +326,146 @@ class PedidoServiceTest {
         verify(pedidoRepository).saveAndFlush(any(Pedido.class));
     }
 
+    @Test
+    void cierreOrdenaPedidosYCalculaCantidadYTotalPersistido() {
+        autorizarCierre();
+        Pedido segundo = pedido(22, LocalDate.now(), 3500f);
+        Pedido primero = pedido(11, LocalDate.now().minusDays(1), 12000f);
+        when(pedidoRepository.findDeUnidadByIds(unidad.getId(), Set.of(22, 11)))
+                .thenReturn(List.of(segundo, primero));
+
+        CierreCajaDTO cierre = service.cierreCaja(USERNAME, List.of(22, 11, 22));
+
+        assertEquals("Ana Pérez", cierre.cajero());
+        assertEquals("Ruedas de Fuego", cierre.unidad());
+        assertEquals(LocalDate.now(), cierre.fecha());
+        assertEquals(2, cierre.cantidadPedidos());
+        assertEquals(15500f, cierre.total(), 0.001f);
+        assertEquals(List.of(11, 22),
+                cierre.pedidos().stream().map(detalle -> detalle.id()).toList());
+        assertEquals(List.of(12000f, 3500f),
+                cierre.pedidos().stream().map(detalle -> detalle.importe()).toList());
+        verify(pedidoRepository).findDeUnidadByIds(unidad.getId(), Set.of(22, 11));
+        verifyNoInteractions(festivalRepository);
+    }
+
+    @Test
+    void cierreVacioAutorizaCajeroSinEjecutarConsultaIn() {
+        autorizarCierre();
+
+        CierreCajaDTO cierre = service.cierreCaja(USERNAME, Set.of());
+
+        assertEquals(0, cierre.cantidadPedidos());
+        assertEquals(0f, cierre.total(), 0.001f);
+        assertTrue(cierre.pedidos().isEmpty());
+        verifyNoInteractions(pedidoRepository, festivalRepository);
+    }
+
+    @Test
+    void cierreRechazaIdsInexistentesOAjenosSinResultadoParcial() {
+        autorizarCierre();
+        when(pedidoRepository.findDeUnidadByIds(unidad.getId(), Set.of(11, 99)))
+                .thenReturn(List.of(pedido(11, LocalDate.now(), 12000f)));
+
+        CierreCajaException error = assertThrows(
+                CierreCajaException.class,
+                () -> service.cierreCaja(USERNAME, Set.of(11, 99)));
+
+        assertTrue(error.getMessage().contains("validar los pedidos"));
+    }
+
+    @Test
+    void cierreRechazaIdsInvalidosAntesDeConsultarPedidos() {
+        autorizarCierre();
+
+        assertThrows(CierreCajaException.class,
+                () -> service.cierreCaja(USERNAME, List.of(0)));
+
+        verifyNoInteractions(pedidoRepository, festivalRepository);
+    }
+
+    @Test
+    void cierreFuncionaSinFestivalActivoParaPedidosYaRegistrados() {
+        autorizarCierre();
+        Pedido pedido = pedido(11, LocalDate.now().minusDays(2), 12000f);
+        when(pedidoRepository.findDeUnidadByIds(unidad.getId(), Set.of(11)))
+                .thenReturn(List.of(pedido));
+
+        CierreCajaDTO cierre = service.cierreCaja(USERNAME, Set.of(11));
+
+        assertEquals(1, cierre.cantidadPedidos());
+        assertEquals(12000f, cierre.total(), 0.001f);
+        verifyNoInteractions(festivalRepository);
+    }
+
+    @Test
+    void cierreRechazaEmpleadoCocina() {
+        EmpleadoCocina cocinero = new EmpleadoCocina();
+        cocinero.setUser(usuarioActivo(USERNAME));
+        when(personalRepository.findByUserUsernameAndBajaFalse(USERNAME)).thenReturn(List.of(cocinero));
+
+        CierreCajaException error = assertThrows(
+                CierreCajaException.class,
+                () -> service.cierreCaja(USERNAME, Set.of()));
+
+        assertTrue(error.getMessage().contains("no es un cajero"));
+        verifyNoInteractions(unidadDeVentaRepository, pedidoRepository, festivalRepository);
+    }
+
+    @Test
+    void cierreRechazaCajeroDadoDeBaja() {
+        when(personalRepository.findByUserUsernameAndBajaFalse(USERNAME)).thenReturn(List.of());
+
+        assertThrows(CierreCajaException.class,
+                () -> service.cierreCaja(USERNAME, Set.of()));
+
+        verifyNoInteractions(unidadDeVentaRepository, pedidoRepository, festivalRepository);
+    }
+
+    @Test
+    void cierreRechazaUsuarioDeshabilitado() {
+        cajero.getUser().setEnabled(false);
+        when(personalRepository.findByUserUsernameAndBajaFalse(USERNAME)).thenReturn(List.of(cajero));
+
+        assertThrows(CierreCajaException.class,
+                () -> service.cierreCaja(USERNAME, Set.of()));
+
+        verifyNoInteractions(unidadDeVentaRepository, pedidoRepository, festivalRepository);
+    }
+
+    @Test
+    void cierreRechazaRolDistintoDeEmpleado() {
+        cajero.getUser().setRole(new Role(RoleName.ROLE_RESPONSABLE));
+        when(personalRepository.findByUserUsernameAndBajaFalse(USERNAME)).thenReturn(List.of(cajero));
+
+        assertThrows(CierreCajaException.class,
+                () -> service.cierreCaja(USERNAME, Set.of()));
+
+        verifyNoInteractions(unidadDeVentaRepository, pedidoRepository, festivalRepository);
+    }
+
+    @Test
+    void cierreRechazaCajeroSinUnidad() {
+        when(personalRepository.findByUserUsernameAndBajaFalse(USERNAME)).thenReturn(List.of(cajero));
+        when(unidadDeVentaRepository.findByPersonal(cajero)).thenReturn(Optional.empty());
+
+        CierreCajaException error = assertThrows(
+                CierreCajaException.class,
+                () -> service.cierreCaja(USERNAME, Set.of()));
+
+        assertTrue(error.getMessage().contains("no pertenece a una unidad"));
+        verifyNoInteractions(pedidoRepository, festivalRepository);
+    }
+
     private void autorizarConFestivales(List<Festival> festivales) {
         when(personalRepository.findByUserUsernameAndBajaFalse(USERNAME)).thenReturn(List.of(cajero));
         when(unidadDeVentaRepository.findByPersonal(cajero)).thenReturn(Optional.of(unidad));
         when(festivalRepository.findByUnidadId(unidad.getId())).thenReturn(festivales);
+    }
+
+    private void autorizarCierre() {
+        when(personalRepository.findByUserUsernameAndBajaFalse(USERNAME)).thenReturn(List.of(cajero));
+        when(unidadDeVentaRepository.findByPersonal(cajero)).thenReturn(Optional.of(unidad));
     }
 
     private AltaPedidoForm formulario(ItemPedidoForm... items) {
@@ -357,5 +498,13 @@ class PedidoServiceTest {
         plato.setPrecioVenta(precio);
         plato.setBaja(baja);
         return plato;
+    }
+
+    private Pedido pedido(int id, LocalDate fecha, float total) {
+        Pedido pedido = new Pedido();
+        pedido.setId(id);
+        pedido.setFecha(fecha);
+        pedido.setTotal(total);
+        return pedido;
     }
 }
