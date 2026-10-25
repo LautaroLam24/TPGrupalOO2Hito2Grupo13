@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository("unidadDeVentaRepository")
@@ -16,4 +17,7 @@ public interface IUnidadDeVentaRepository extends JpaRepository<UnidadDeVenta, I
 
     @Query("select distinct u from UnidadDeVenta u join u.staff p where p = :personal")
     Optional<UnidadDeVenta> findByPersonal(@Param("personal") Personal personal);
+
+    @Query("select u from UnidadDeVenta u join u.responsable r where r.username = :username")
+    List<UnidadDeVenta> findByResponsableUsername(@Param("username") String username);
 }
