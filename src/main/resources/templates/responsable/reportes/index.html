@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes - Epicentro Gourmet</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand" th:href="@{/index}">Epicentro Gourmet</a>
+        <a class="btn btn-outline-light btn-sm" th:href="@{/index}">Volver al inicio</a>
+    </div>
+</nav>
+
+<main class="container py-5">
+    <div class="mx-auto" style="max-width: 900px;">
+        <h1 class="h3 mb-2">Reportes</h1>
+        <p class="text-muted mb-4">Consultá los reportes de la unidad de venta que administrás.</p>
+
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body p-4 d-flex flex-column">
+                        <h2 class="h5 card-title">Plato estrella</h2>
+                        <p class="card-text text-muted flex-grow-1">
+                            Conocé el plato que apareció en la mayor cantidad de pedidos de un festival.
+                        </p>
+                        <a class="btn btn-primary align-self-start"
+                           th:href="@{/responsable/reportes/plato-estrella}">
+                            Consultar
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <p class="text-muted mt-4 mb-0">Se incorporarán nuevos reportes próximamente.</p>
+    </div>
+</main>
+</body>
+</html>
