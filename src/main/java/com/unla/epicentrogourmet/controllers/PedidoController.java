@@ -5,7 +5,9 @@ import com.unla.epicentrogourmet.dto.ItemPedidoForm;
 import com.unla.epicentrogourmet.entities.Pedido;
 import com.unla.epicentrogourmet.exceptions.AltaPedidoException;
 import com.unla.epicentrogourmet.helpers.ViewRouteHelper;
+import com.unla.epicentrogourmet.session.SeguimientoPedidosSesion;
 import com.unla.epicentrogourmet.services.implementation.PedidoService;
+import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
@@ -27,9 +29,12 @@ public class PedidoController {
     static final String FORM_ATTRIBUTE = "altaPedidoForm";
 
     private final PedidoService pedidoService;
+    private final SeguimientoPedidosSesion seguimientoPedidosSesion;
 
-    public PedidoController(PedidoService pedidoService) {
+    public PedidoController(PedidoService pedidoService,
+                            SeguimientoPedidosSesion seguimientoPedidosSesion) {
         this.pedidoService = pedidoService;
+        this.seguimientoPedidosSesion = seguimientoPedidosSesion;
     }
 
     @GetMapping
@@ -47,6 +52,7 @@ public class PedidoController {
     public String registrar(@Valid @ModelAttribute(FORM_ATTRIBUTE) AltaPedidoForm form,
                             BindingResult bindingResult,
                             Authentication authentication,
+                            HttpSession session,
                             Model model,
                             RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
@@ -55,7 +61,12 @@ public class PedidoController {
         }
 
         try {
-            Pedido pedido = pedidoService.registrar(nombreUsuario(authentication), form);
+            String username = nombreUsuario(authentication);
+            Pedido pedido;
+            synchronized (session) {
+                pedido = pedidoService.registrar(username, form);
+                seguimientoPedidosSesion.registrar(session, username, pedido.getId());
+            }
             redirectAttributes.addFlashAttribute(
                     "mensajeExito",
                     "El pedido #" + pedido.getId() + " se registró correctamente. Total: $" + pedido.getTotal());
