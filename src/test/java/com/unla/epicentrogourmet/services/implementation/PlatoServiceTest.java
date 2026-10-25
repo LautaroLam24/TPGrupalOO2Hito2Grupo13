@@ -3,14 +3,9 @@ package com.unla.epicentrogourmet.services.implementation;
 import com.unla.epicentrogourmet.dto.PlatoDTO;
 import com.unla.epicentrogourmet.entities.Festival;
 import com.unla.epicentrogourmet.entities.FoodTruck;
-import com.unla.epicentrogourmet.entities.Role;
-import com.unla.epicentrogourmet.entities.RoleName;
-import com.unla.epicentrogourmet.entities.UnidadDeVenta;
-import com.unla.epicentrogourmet.entities.User;
 import com.unla.epicentrogourmet.exceptions.PlatoEstrellaException;
-import com.unla.epicentrogourmet.repositories.IFestivalRepository;
+import com.unla.epicentrogourmet.exceptions.ReporteResponsableException;
 import com.unla.epicentrogourmet.repositories.IPedidoRepository;
-import com.unla.epicentrogourmet.repositories.IUnidadDeVentaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,10 +35,7 @@ class PlatoServiceTest {
     private static final String USERNAME = "responsable@epicentro.com";
 
     @Mock
-    private IUnidadDeVentaRepository unidadDeVentaRepository;
-
-    @Mock
-    private IFestivalRepository festivalRepository;
+    private ReporteResponsableService reporteResponsableService;
 
     @Mock
     private IPedidoRepository pedidoRepository;
@@ -54,14 +46,12 @@ class PlatoServiceTest {
     @BeforeEach
     void setUp() {
         service = new PlatoService(
-                unidadDeVentaRepository,
-                festivalRepository,
+                reporteResponsableService,
                 pedidoRepository);
 
         unidad = new FoodTruck();
         unidad.setId(10);
         unidad.setNombreComercial("Ruedas de Fuego");
-        unidad.setResponsable(usuarioResponsable(USERNAME, true));
     }
 
     @Test
@@ -69,9 +59,10 @@ class PlatoServiceTest {
         Festival futuro = festival(3, "Festival futuro", LocalDate.now().plusDays(10), LocalDate.now().plusDays(12));
         Festival vigente = festival(2, "Festival vigente", LocalDate.now().minusDays(1), LocalDate.now().plusDays(1));
         Festival finalizado = festival(1, "Festival finalizado", LocalDate.now().minusDays(10), LocalDate.now().minusDays(8));
-        autorizarUnidad();
-        when(festivalRepository.findByUnidadId(unidad.getId()))
-                .thenReturn(List.of(futuro, vigente, finalizado));
+        when(reporteResponsableService.preparar(USERNAME))
+                .thenReturn(new ReporteResponsableService.ContextoReportes(
+                        unidad.getNombreComercial(),
+                        List.of(opcion(futuro), opcion(vigente), opcion(finalizado))));
 
         PlatoService.ContextoPlatoEstrella contexto = service.preparar(USERNAME);
 
@@ -80,72 +71,81 @@ class PlatoServiceTest {
                 contexto.festivales().stream().map(PlatoService.FestivalOpcion::id).toList());
         assertThrows(UnsupportedOperationException.class,
                 () -> contexto.festivales().add(contexto.festivales().get(0)));
-        verify(unidadDeVentaRepository).findByResponsableUsername(USERNAME);
-        verify(festivalRepository).findByUnidadId(unidad.getId());
-        verifyNoMoreInteractions(unidadDeVentaRepository, festivalRepository, pedidoRepository);
+        verify(reporteResponsableService).preparar(USERNAME);
+        verifyNoMoreInteractions(reporteResponsableService, pedidoRepository);
     }
 
     @Test
     void rechazaUsernameNuloVacioOEnBlancoAntesDeConsultar() {
+        when(reporteResponsableService.preparar(null))
+                .thenThrow(new ReporteResponsableException("Se requiere un responsable autenticado."));
+        when(reporteResponsableService.preparar(""))
+                .thenThrow(new ReporteResponsableException("Se requiere un responsable autenticado."));
+        when(reporteResponsableService.preparar("   "))
+                .thenThrow(new ReporteResponsableException("Se requiere un responsable autenticado."));
+
         assertAll(
                 () -> assertThrows(PlatoEstrellaException.class, () -> service.preparar(null)),
                 () -> assertThrows(PlatoEstrellaException.class, () -> service.preparar("")),
                 () -> assertThrows(PlatoEstrellaException.class, () -> service.preparar("   ")));
 
-        verifyNoInteractions(unidadDeVentaRepository, festivalRepository, pedidoRepository);
+        verifyNoInteractions(pedidoRepository);
     }
 
     @Test
     void rechazaResponsableSinUnidad() {
-        when(unidadDeVentaRepository.findByResponsableUsername(USERNAME)).thenReturn(List.of());
+        when(reporteResponsableService.preparar(USERNAME))
+                .thenThrow(new ReporteResponsableException(
+                        "No se encontró una unidad de venta para el responsable autenticado."));
 
         PlatoEstrellaException error = assertThrows(
                 PlatoEstrellaException.class,
                 () -> service.preparar(USERNAME));
 
         assertTrue(error.getMessage().contains("No se encontró una unidad"));
-        verifyNoInteractions(festivalRepository, pedidoRepository);
+        verifyNoInteractions(pedidoRepository);
     }
 
     @Test
     void rechazaCardinalidadInesperadaDeUnidades() {
-        FoodTruck otraUnidad = new FoodTruck();
-        otraUnidad.setResponsable(usuarioResponsable(USERNAME, true));
-        when(unidadDeVentaRepository.findByResponsableUsername(USERNAME))
-                .thenReturn(List.of(unidad, otraUnidad));
+        when(reporteResponsableService.preparar(USERNAME))
+                .thenThrow(new ReporteResponsableException(
+                        "La configuración de unidades del responsable autenticado es inconsistente."));
 
         PlatoEstrellaException error = assertThrows(
                 PlatoEstrellaException.class,
                 () -> service.preparar(USERNAME));
 
         assertTrue(error.getMessage().contains("inconsistente"));
-        verifyNoInteractions(festivalRepository, pedidoRepository);
+        verifyNoInteractions(pedidoRepository);
     }
 
     @Test
     void rechazaUsuarioDeshabilitado() {
-        unidad.getResponsable().setEnabled(false);
-        autorizarUnidad();
+        when(reporteResponsableService.preparar(USERNAME))
+                .thenThrow(new ReporteResponsableException(
+                        "El responsable autenticado no se encuentra habilitado o autorizado."));
 
         PlatoEstrellaException error = assertThrows(
                 PlatoEstrellaException.class,
                 () -> service.preparar(USERNAME));
 
         assertTrue(error.getMessage().contains("habilitado o autorizado"));
-        verifyNoInteractions(festivalRepository, pedidoRepository);
+        verifyNoInteractions(pedidoRepository);
     }
 
     @Test
     void rechazaUsuarioConRolIncorrecto() {
-        unidad.getResponsable().setRole(new Role(RoleName.ROLE_ADMIN));
-        autorizarUnidad();
+        when(reporteResponsableService.preparar(USERNAME))
+                .thenThrow(new ReporteResponsableException(
+                        "El responsable autenticado no se encuentra habilitado o autorizado."));
 
         PlatoEstrellaException error = assertThrows(
                 PlatoEstrellaException.class,
                 () -> service.preparar(USERNAME));
 
         assertTrue(error.getMessage().contains("habilitado o autorizado"));
-        verifyNoInteractions(festivalRepository, pedidoRepository);
+        verifyNoInteractions(pedidoRepository);
     }
 
     @Test
@@ -160,10 +160,9 @@ class PlatoServiceTest {
         Optional<PlatoDTO> resultado = service.platoEstrella(USERNAME, festival.getId());
 
         assertEquals(Optional.of(new PlatoDTO("Pizza", 3, "Ruedas de Fuego")), resultado);
-        verify(unidadDeVentaRepository).findByResponsableUsername(USERNAME);
-        verify(festivalRepository).findByIdAndUnidadId(festival.getId(), unidad.getId());
+        verify(reporteResponsableService).autorizarFestival(USERNAME, festival.getId());
         verify(pedidoRepository).findRankingPlatosPorPedidos(unidad.getId(), inicio, fin);
-        verifyNoMoreInteractions(unidadDeVentaRepository, festivalRepository, pedidoRepository);
+        verifyNoMoreInteractions(reporteResponsableService, pedidoRepository);
     }
 
     @Test
@@ -196,9 +195,9 @@ class PlatoServiceTest {
 
     @Test
     void festivalInexistenteONoAsociadoSeRechazaSinConsultarPedidos() {
-        autorizarUnidad();
-        when(festivalRepository.findByIdAndUnidadId(999, unidad.getId()))
-                .thenReturn(Optional.empty());
+        when(reporteResponsableService.autorizarFestival(USERNAME, 999))
+                .thenThrow(new ReporteResponsableException(
+                        "El festival seleccionado no existe o no está asociado a la unidad administrada."));
 
         PlatoEstrellaException error = assertThrows(
                 PlatoEstrellaException.class,
@@ -211,7 +210,7 @@ class PlatoServiceTest {
     @Test
     void rechazaFechaInicialNula() {
         Festival festival = festival(20, "Festival inválido", null, LocalDate.now());
-        autorizarConsulta(festival);
+        rechazarFechas(festival);
 
         assertThrows(PlatoEstrellaException.class,
                 () -> service.platoEstrella(USERNAME, festival.getId()));
@@ -222,7 +221,7 @@ class PlatoServiceTest {
     @Test
     void rechazaFechaFinalNula() {
         Festival festival = festival(20, "Festival inválido", LocalDate.now(), null);
-        autorizarConsulta(festival);
+        rechazarFechas(festival);
 
         assertThrows(PlatoEstrellaException.class,
                 () -> service.platoEstrella(USERNAME, festival.getId()));
@@ -234,7 +233,7 @@ class PlatoServiceTest {
     void rechazaInicioPosteriorAlFin() {
         Festival festival = festival(
                 20, "Festival inválido", LocalDate.of(2026, 10, 10), LocalDate.of(2026, 10, 1));
-        autorizarConsulta(festival);
+        rechazarFechas(festival);
 
         PlatoEstrellaException error = assertThrows(
                 PlatoEstrellaException.class,
@@ -304,15 +303,24 @@ class PlatoServiceTest {
                 () -> assertFalse(jpql.contains("baja")));
     }
 
-    private void autorizarUnidad() {
-        when(unidadDeVentaRepository.findByResponsableUsername(USERNAME))
-                .thenReturn(List.of(unidad));
+    private void autorizarConsulta(Festival festival) {
+        when(reporteResponsableService.autorizarFestival(USERNAME, festival.getId()))
+                .thenReturn(new ReporteResponsableService.ContextoFestivalAutorizado(
+                        unidad, festival));
     }
 
-    private void autorizarConsulta(Festival festival) {
-        autorizarUnidad();
-        when(festivalRepository.findByIdAndUnidadId(festival.getId(), unidad.getId()))
-                .thenReturn(Optional.of(festival));
+    private void rechazarFechas(Festival festival) {
+        when(reporteResponsableService.autorizarFestival(USERNAME, festival.getId()))
+                .thenThrow(new ReporteResponsableException(
+                        "El festival seleccionado tiene un intervalo de fechas inválido."));
+    }
+
+    private ReporteResponsableService.FestivalOpcion opcion(Festival festival) {
+        return new ReporteResponsableService.FestivalOpcion(
+                festival.getId(),
+                festival.getNombre(),
+                festival.getFechaInicio(),
+                festival.getFechaFin());
     }
 
     private Festival festivalVigente() {
@@ -329,11 +337,4 @@ class PlatoServiceTest {
         return festival;
     }
 
-    private User usuarioResponsable(String username, boolean enabled) {
-        return new User(
-                username,
-                "password",
-                enabled,
-                new Role(RoleName.ROLE_RESPONSABLE));
-    }
 }

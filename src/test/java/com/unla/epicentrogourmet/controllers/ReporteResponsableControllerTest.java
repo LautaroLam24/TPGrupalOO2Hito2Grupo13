@@ -2,8 +2,12 @@ package com.unla.epicentrogourmet.controllers;
 
 import com.unla.epicentrogourmet.configuration.SecurityConfiguration;
 import com.unla.epicentrogourmet.dto.PlatoDTO;
+import com.unla.epicentrogourmet.dto.ReporteVentaDTO;
 import com.unla.epicentrogourmet.exceptions.PlatoEstrellaException;
+import com.unla.epicentrogourmet.exceptions.ReporteResponsableException;
+import com.unla.epicentrogourmet.services.IFestivalService;
 import com.unla.epicentrogourmet.services.implementation.PlatoService;
+import com.unla.epicentrogourmet.services.implementation.ReporteResponsableService;
 import com.unla.epicentrogourmet.services.implementation.UserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +32,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
@@ -46,6 +51,12 @@ class ReporteResponsableControllerTest {
 
     @MockBean
     private PlatoService platoService;
+
+    @MockBean
+    private ReporteResponsableService reporteResponsableService;
+
+    @MockBean
+    private IFestivalService festivalService;
 
     @MockBean
     private UserService userService;
@@ -78,16 +89,26 @@ class ReporteResponsableControllerTest {
     }
 
     @Test
-    void responsableAccedeALaPortadaQueSoloEnlazaPlatoEstrella() throws Exception {
+    void empleadoNoPuedeAccederARecaudacion() throws Exception {
+        mockMvc.perform(get("/responsable/reportes/recaudacion")
+                        .session(sesionAutenticada(USERNAME, "ROLE_EMPLEADO")))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(reporteResponsableService, festivalService);
+    }
+
+    @Test
+    void responsableAccedeALaPortadaConPlatoEstrellaYRecaudacion() throws Exception {
         mockMvc.perform(get("/responsable/reportes")
                         .session(sesionResponsable()))
                 .andExpect(status().isOk())
                 .andExpect(view().name("responsable/reportes/index"))
                 .andExpect(content().string(containsString("Plato estrella")))
-                .andExpect(content().string(not(containsString("/responsable/reportes/recaudacion"))))
+                .andExpect(content().string(containsString("Recaudación")))
+                .andExpect(content().string(containsString("/responsable/reportes/recaudacion")))
                 .andExpect(content().string(not(containsString("/responsable/reportes/rentabilidad"))));
 
-        verifyNoInteractions(platoService);
+        verifyNoInteractions(platoService, reporteResponsableService, festivalService);
     }
 
     @Test
@@ -179,6 +200,125 @@ class ReporteResponsableControllerTest {
         verify(platoService, never()).preparar("intruso@epicentro.com");
     }
 
+    @Test
+    void getRecaudacionSinSeleccionUsaUsernameAutenticadoYMuestraContexto() throws Exception {
+        ReporteResponsableService.ContextoReportes contexto = contextoReportes();
+        when(reporteResponsableService.preparar(USERNAME)).thenReturn(contexto);
+
+        mockMvc.perform(get("/responsable/reportes/recaudacion")
+                        .session(sesionResponsable()))
+                .andExpect(status().isOk())
+                .andExpect(view().name("responsable/reportes/recaudacion"))
+                .andExpect(model().attribute("unidad", "Ruedas de Fuego"))
+                .andExpect(model().attribute("festivales", contexto.festivales()))
+                .andExpect(model().attributeDoesNotExist(
+                        "festivalId", "reporteVenta", "sinRecaudacion"));
+
+        verify(reporteResponsableService).preparar(USERNAME);
+        verifyNoInteractions(festivalService);
+    }
+
+    @Test
+    void responsableSinUnidadVeErrorFuncionalEnRecaudacion() throws Exception {
+        String mensaje = "No se encontró una unidad de venta para el responsable autenticado.";
+        when(reporteResponsableService.preparar(USERNAME))
+                .thenThrow(new ReporteResponsableException(mensaje));
+
+        mockMvc.perform(get("/responsable/reportes/recaudacion")
+                        .session(sesionResponsable()))
+                .andExpect(status().isOk())
+                .andExpect(view().name("responsable/reportes/recaudacion"))
+                .andExpect(model().attribute("error", mensaje))
+                .andExpect(model().attributeDoesNotExist("unidad", "reporteVenta"));
+
+        verifyNoInteractions(festivalService);
+    }
+
+    @Test
+    void getRecaudacionConFestivalConservaSeleccionFechasYTotal() throws Exception {
+        ReporteResponsableService.ContextoReportes contexto = contextoReportes();
+        ReporteVentaDTO reporte = new ReporteVentaDTO("Festival Sur", 450000.5f);
+        when(reporteResponsableService.preparar(USERNAME)).thenReturn(contexto);
+        when(festivalService.reporteRecaudacion(USERNAME, FESTIVAL_ID)).thenReturn(reporte);
+
+        mockMvc.perform(get("/responsable/reportes/recaudacion")
+                        .session(sesionResponsable())
+                        .param("festivalId", String.valueOf(FESTIVAL_ID)))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute("festivalId", FESTIVAL_ID))
+                .andExpect(model().attribute("festivalSeleccionado", contexto.festivales().get(0)))
+                .andExpect(model().attribute("consultaRealizada", true))
+                .andExpect(model().attribute("reporteVenta", reporte))
+                .andExpect(model().attributeDoesNotExist("sinRecaudacion"))
+                .andExpect(content().string(containsString("01/10/2026")))
+                .andExpect(content().string(containsString("05/10/2026")));
+
+        verify(festivalService).reporteRecaudacion(USERNAME, FESTIVAL_ID);
+    }
+
+    @Test
+    void recaudacionCeroMuestraMensajeInformativoSinAfirmarAusenciaDePedidos() throws Exception {
+        when(reporteResponsableService.preparar(USERNAME)).thenReturn(contextoReportes());
+        when(festivalService.reporteRecaudacion(USERNAME, FESTIVAL_ID))
+                .thenReturn(new ReporteVentaDTO("Festival Sur", 0.0f));
+
+        mockMvc.perform(get("/responsable/reportes/recaudacion")
+                        .session(sesionResponsable())
+                        .param("festivalId", String.valueOf(FESTIVAL_ID)))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute("sinRecaudacion", true))
+                .andExpect(content().string(containsString(
+                        "El Festival no registra recaudación en el período")))
+                .andExpect(content().string(not(containsString("no existen pedidos"))));
+    }
+
+    @Test
+    void festivalInvalidoEnRecaudacionMuestraErrorSeguro() throws Exception {
+        String mensaje = "El festival seleccionado no existe o no está asociado a la unidad administrada.";
+        when(reporteResponsableService.preparar(USERNAME)).thenReturn(contextoReportes());
+        when(festivalService.reporteRecaudacion(USERNAME, 999))
+                .thenThrow(new ReporteResponsableException(mensaje));
+
+        mockMvc.perform(get("/responsable/reportes/recaudacion")
+                        .session(sesionResponsable())
+                        .param("festivalId", "999"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("responsable/reportes/recaudacion"))
+                .andExpect(model().attribute("error", mensaje))
+                .andExpect(model().attributeDoesNotExist("reporteVenta"));
+    }
+
+    @Test
+    void parametrosManipuladosNoCambianIdentidadUnidadFechasNiImporteDeRecaudacion() throws Exception {
+        when(reporteResponsableService.preparar(USERNAME)).thenReturn(contextoReportes());
+        when(festivalService.reporteRecaudacion(USERNAME, FESTIVAL_ID))
+                .thenReturn(new ReporteVentaDTO("Festival Sur", 1000.0f));
+
+        mockMvc.perform(get("/responsable/reportes/recaudacion")
+                        .session(sesionResponsable())
+                        .param("festivalId", String.valueOf(FESTIVAL_ID))
+                        .param("unidadId", "999")
+                        .param("username", "intruso@epicentro.com")
+                        .param("fechaInicio", "2000-01-01")
+                        .param("fechaFin", "2099-01-01")
+                        .param("recaudacionTotal", "1"))
+                .andExpect(status().isOk());
+
+        verify(reporteResponsableService).preparar(USERNAME);
+        verify(festivalService).reporteRecaudacion(USERNAME, FESTIVAL_ID);
+        verify(reporteResponsableService, never()).preparar("intruso@epicentro.com");
+        verify(festivalService, never()).reporteRecaudacion("intruso@epicentro.com", FESTIVAL_ID);
+    }
+
+    @Test
+    void recaudacionNoExponeEndpointPost() throws Exception {
+        mockMvc.perform(post("/responsable/reportes/recaudacion")
+                        .session(sesionResponsable()))
+                .andExpect(status().isMethodNotAllowed());
+
+        verifyNoInteractions(reporteResponsableService, festivalService);
+    }
+
     private MockHttpSession sesionResponsable() {
         return sesionAutenticada(USERNAME, "ROLE_RESPONSABLE");
     }
@@ -197,6 +337,16 @@ class ReporteResponsableControllerTest {
         return new PlatoService.ContextoPlatoEstrella(
                 "Ruedas de Fuego",
                 List.of(new PlatoService.FestivalOpcion(
+                        FESTIVAL_ID,
+                        "Festival Sur",
+                        LocalDate.of(2026, 10, 1),
+                        LocalDate.of(2026, 10, 5))));
+    }
+
+    private ReporteResponsableService.ContextoReportes contextoReportes() {
+        return new ReporteResponsableService.ContextoReportes(
+                "Ruedas de Fuego",
+                List.of(new ReporteResponsableService.FestivalOpcion(
                         FESTIVAL_ID,
                         "Festival Sur",
                         LocalDate.of(2026, 10, 1),

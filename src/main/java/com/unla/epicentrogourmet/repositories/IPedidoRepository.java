@@ -41,4 +41,17 @@ public interface IPedidoRepository extends JpaRepository<Pedido, Integer> {
             @Param("unidadId") int unidadId,
             @Param("fechaInicio") LocalDate fechaInicio,
             @Param("fechaFin") LocalDate fechaFin);
+
+    @Query("""
+            select sum(p.total)
+            from Festival f
+            join f.unidades u
+            join u.pedidos p
+            where f.id = :festivalId
+              and p.fecha between :fechaInicio and :fechaFin
+            """)
+    Double sumTotalByFestivalAndFechas(
+            @Param("festivalId") int festivalId,
+            @Param("fechaInicio") LocalDate fechaInicio,
+            @Param("fechaFin") LocalDate fechaFin);
 }
