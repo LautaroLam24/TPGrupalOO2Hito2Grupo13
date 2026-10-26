@@ -43,4 +43,18 @@ public class FestivalController {
         mAV.addObject("unidades", festivalService.traerUnidades(id));
         return mAV;
     }
+
+    // GET: /admin/festivales/{id}/ranking
+    @GetMapping("/{id}/ranking")
+    public ModelAndView ranking(@PathVariable("id") int id, RedirectAttributes redirectAttributes) {
+        Optional<Festival> festival = festivalService.traerPorId(id);
+        if (festival.isEmpty()) {
+            redirectAttributes.addFlashAttribute("mensajeError", "El festival solicitado no existe.");
+            return new ModelAndView("redirect:" + ViewRouteHelper.ROUTE_ADMIN_FESTIVALES);
+        }
+        ModelAndView mAV = new ModelAndView(ViewRouteHelper.ADMIN_RANKING_FESTIVAL);
+        mAV.addObject("festival", festival.get());
+        mAV.addObject("ranking", festivalService.rankingUnidades(id));
+        return mAV;
+    }
 }

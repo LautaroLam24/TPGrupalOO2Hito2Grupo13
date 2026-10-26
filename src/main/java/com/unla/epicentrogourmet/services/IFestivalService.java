@@ -1,5 +1,6 @@
 package com.unla.epicentrogourmet.services;
 
+import com.unla.epicentrogourmet.dto.RankingUnidadDTO;
 import com.unla.epicentrogourmet.dto.ReporteVentaDTO;
 import com.unla.epicentrogourmet.entities.Festival;
 import com.unla.epicentrogourmet.entities.UnidadDeVenta;
@@ -20,4 +21,6 @@ public interface IFestivalService {
     Optional<Festival> traerPorId(int idFestival);
 
     List<UnidadDeVenta> traerUnidades(int idFestival);
+
+    List<RankingUnidadDTO> rankingUnidades(int idFestival);
 }
