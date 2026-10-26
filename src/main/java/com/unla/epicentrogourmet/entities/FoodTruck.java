@@ -23,4 +23,9 @@ public class FoodTruck extends UnidadDeVenta {
         }
         return canon;
     }
+
+    @Override
+    public String getTipo() {
+        return "Food truck";
+    }
 }

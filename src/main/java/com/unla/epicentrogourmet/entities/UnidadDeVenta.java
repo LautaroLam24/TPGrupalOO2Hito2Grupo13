@@ -51,4 +51,6 @@ public abstract class UnidadDeVenta {
     }
 
     public abstract float calcularCanon(Festival festival);
+
+    public abstract String getTipo();
 }
