@@ -2,8 +2,10 @@ package com.unla.epicentrogourmet.services;
 
 import com.unla.epicentrogourmet.dto.ReporteVentaDTO;
 import com.unla.epicentrogourmet.entities.Festival;
+import com.unla.epicentrogourmet.entities.UnidadDeVenta;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface IFestivalService {
 
@@ -14,4 +16,8 @@ public interface IFestivalService {
     ReporteVentaDTO reporteRecaudacion(String username, int festivalId);
 
     List<Festival> traerTodosPorFecha();
+
+    Optional<Festival> traerPorId(int idFestival);
+
+    List<UnidadDeVenta> traerUnidades(int idFestival);
 }

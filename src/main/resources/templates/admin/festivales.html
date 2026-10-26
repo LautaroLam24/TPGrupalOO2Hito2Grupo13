@@ -23,6 +23,9 @@
 <main class="container py-5">
     <h1 class="h3 mb-4">Festivales</h1>
 
+    <div th:if="${mensajeError != null}"
+         class="alert alert-danger" th:text="${mensajeError}"></div>
+
     <div th:if="${#lists.isEmpty(festivales)}" class="alert alert-warning">
         No hay festivales cargados.
     </div>
@@ -36,6 +39,8 @@
                 <th>Fin</th>
                 <th>Duración</th>
                 <th>Estado</th>
+                <th>Unidades</th>
+                <th></th>
             </tr>
             </thead>
             <tbody>
@@ -48,6 +53,11 @@
                     <span th:if="${f.estaActivo(#temporals.createToday())}" class="badge bg-success">En curso</span>
                     <span th:if="${f.fechaInicio.isAfter(#temporals.createToday())}" class="badge bg-info text-dark">Próximo</span>
                     <span th:if="${f.fechaFin.isBefore(#temporals.createToday())}" class="badge bg-secondary">Finalizado</span>
+                </td>
+                <td th:text="${#sets.size(f.unidades)}">0</td>
+                <td class="text-end">
+                    <a th:href="@{/admin/festivales/{id}/unidades(id=${f.id})}"
+                       class="btn btn-outline-primary btn-sm">Ver unidades</a>
                 </td>
             </tr>
             </tbody>

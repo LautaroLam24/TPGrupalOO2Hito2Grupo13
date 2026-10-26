@@ -18,4 +18,9 @@ public class PuestoDesarmable extends UnidadDeVenta {
         return getSuperficieM2() * costo.getCostoSuperficie()
                 - tiempoMontajeMin * costo.getCostoMontaje();
     }
+
+    @Override
+    public String getTipo() {
+        return "Puesto desarmable";
+    }
 }

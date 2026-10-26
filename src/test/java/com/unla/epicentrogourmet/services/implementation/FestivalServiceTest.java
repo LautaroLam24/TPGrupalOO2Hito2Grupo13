@@ -3,6 +3,8 @@ package com.unla.epicentrogourmet.services.implementation;
 import com.unla.epicentrogourmet.dto.ReporteVentaDTO;
 import com.unla.epicentrogourmet.entities.Festival;
 import com.unla.epicentrogourmet.entities.FoodTruck;
+import com.unla.epicentrogourmet.entities.PuestoDesarmable;
+import com.unla.epicentrogourmet.entities.UnidadDeVenta;
 import com.unla.epicentrogourmet.exceptions.ReporteResponsableException;
 import com.unla.epicentrogourmet.repositories.IFestivalRepository;
 import com.unla.epicentrogourmet.repositories.IPedidoRepository;
@@ -17,6 +19,7 @@ import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -194,6 +197,53 @@ class FestivalServiceTest {
                 () -> assertFalse(jpql.contains("p.items")),
                 () -> assertFalse(jpql.contains("sum(distinct")),
                 () -> assertFalse(jpql.contains(":unidadid")));
+    }
+
+    @Test
+    void traerUnidadesDevuelveLasUnidadesDelFestivalSinConsultarOtrasDependencias() {
+        PuestoDesarmable puesto = new PuestoDesarmable();
+        puesto.setId(11);
+        List<UnidadDeVenta> unidades = List.of(unidadResponsable, puesto);
+        when(festivalRepository.findUnidadesByFestivalId(FESTIVAL_ID)).thenReturn(unidades);
+
+        List<UnidadDeVenta> resultado = service.traerUnidades(FESTIVAL_ID);
+
+        assertEquals(unidades, resultado);
+        verify(festivalRepository).findUnidadesByFestivalId(FESTIVAL_ID);
+        verifyNoMoreInteractions(festivalRepository);
+        verifyNoInteractions(reporteResponsableService, pedidoRepository);
+    }
+
+    @Test
+    void traerUnidadesDeFestivalSinUnidadesDevuelveListaVacia() {
+        when(festivalRepository.findUnidadesByFestivalId(FESTIVAL_ID)).thenReturn(List.of());
+
+        assertTrue(service.traerUnidades(FESTIVAL_ID).isEmpty());
+    }
+
+    @Test
+    void traerPorIdDevuelveElFestivalOVacioSiNoExiste() {
+        when(festivalRepository.findById(FESTIVAL_ID)).thenReturn(Optional.of(festival));
+        when(festivalRepository.findById(99)).thenReturn(Optional.empty());
+
+        assertEquals(Optional.of(festival), service.traerPorId(FESTIVAL_ID));
+        assertTrue(service.traerPorId(99).isEmpty());
+        verifyNoInteractions(reporteResponsableService, pedidoRepository);
+    }
+
+    @Test
+    void jpqlTraeUnidadesDelFestivalConResponsableYOrdenadasPorCodigo()
+            throws NoSuchMethodException {
+        Method metodo = IFestivalRepository.class.getMethod("findUnidadesByFestivalId", int.class);
+        Query query = metodo.getAnnotation(Query.class);
+        String jpql = query.value().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+
+        assertAll(
+                () -> assertTrue(jpql.contains("select u")),
+                () -> assertTrue(jpql.contains("join f.unidades u")),
+                () -> assertTrue(jpql.contains("join fetch u.responsable")),
+                () -> assertTrue(jpql.contains("where f.id = :festivalid")),
+                () -> assertTrue(jpql.contains("order by u.codigo")));
     }
 
     private void autorizarFestival() {

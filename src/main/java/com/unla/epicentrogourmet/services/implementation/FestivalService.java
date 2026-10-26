@@ -2,6 +2,7 @@ package com.unla.epicentrogourmet.services.implementation;
 
 import com.unla.epicentrogourmet.dto.ReporteVentaDTO;
 import com.unla.epicentrogourmet.entities.Festival;
+import com.unla.epicentrogourmet.entities.UnidadDeVenta;
 import com.unla.epicentrogourmet.exceptions.ReporteResponsableException;
 import com.unla.epicentrogourmet.repositories.IFestivalRepository;
 import com.unla.epicentrogourmet.repositories.IPedidoRepository;
@@ -11,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Service("festivalService")
 public class FestivalService implements IFestivalService {
@@ -65,5 +67,15 @@ public class FestivalService implements IFestivalService {
     @Override
     public List<Festival> traerTodosPorFecha() {
         return festivalRepository.findAllByOrderByFechaInicioAsc();
+    }
+
+    @Override
+    public Optional<Festival> traerPorId(int idFestival) {
+        return festivalRepository.findById(idFestival);
+    }
+
+    @Override
+    public List<UnidadDeVenta> traerUnidades(int idFestival) {
+        return festivalRepository.findUnidadesByFestivalId(idFestival);
     }
 }

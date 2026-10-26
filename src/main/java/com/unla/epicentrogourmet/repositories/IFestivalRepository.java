@@ -1,6 +1,7 @@
 package com.unla.epicentrogourmet.repositories;
 
 import com.unla.epicentrogourmet.entities.Festival;
+import com.unla.epicentrogourmet.entities.UnidadDeVenta;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -32,5 +33,18 @@ public interface IFestivalRepository extends JpaRepository<Festival, Integer> {
             @Param("festivalId") int festivalId,
             @Param("unidadId") int unidadId);
 
+    @Query("""
+            select distinct f
+            from Festival f left join fetch f.unidades
+            order by f.fechaInicio asc
+            """)
     List<Festival> findAllByOrderByFechaInicioAsc();
+
+    @Query("""
+            select u
+            from Festival f join f.unidades u join fetch u.responsable
+            where f.id = :festivalId
+            order by u.codigo asc
+            """)
+    List<UnidadDeVenta> findUnidadesByFestivalId(@Param("festivalId") int festivalId);
 }

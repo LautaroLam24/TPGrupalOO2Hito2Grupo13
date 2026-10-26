@@ -2,6 +2,7 @@ package com.unla.epicentrogourmet.entities;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -30,5 +31,11 @@ class UnidadDeVentaTest {
     void validarCodigoRechazaCaracteresNoAlfanumericos() {
         assertFalse(UnidadDeVenta.validarCodigo("ABCD-12345"));
         assertFalse(UnidadDeVenta.validarCodigo("ABCD 12345"));
+    }
+
+    @Test
+    void cadaSubclaseInformaSuTipo() {
+        assertEquals("Food truck", new FoodTruck().getTipo());
+        assertEquals("Puesto desarmable", new PuestoDesarmable().getTipo());
     }
 }
