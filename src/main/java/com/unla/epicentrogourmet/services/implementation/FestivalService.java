@@ -1,5 +1,6 @@
 package com.unla.epicentrogourmet.services.implementation;
 
+import com.unla.epicentrogourmet.dto.RankingUnidadDTO;
 import com.unla.epicentrogourmet.dto.ReporteVentaDTO;
 import com.unla.epicentrogourmet.entities.Festival;
 import com.unla.epicentrogourmet.entities.UnidadDeVenta;
@@ -11,7 +12,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service("festivalService")
@@ -77,5 +82,34 @@ public class FestivalService implements IFestivalService {
     @Override
     public List<UnidadDeVenta> traerUnidades(int idFestival) {
         return festivalRepository.findUnidadesByFestivalId(idFestival);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RankingUnidadDTO> rankingUnidades(int idFestival) {
+        Map<Integer, Double> recaudacionPorUnidad = new HashMap<>();
+        for (Object[] fila : pedidoRepository.findRecaudacionPorUnidadDeFestival(idFestival)) {
+            recaudacionPorUnidad.put(((Number) fila[0]).intValue(), ((Number) fila[1]).doubleValue());
+        }
+
+        List<RankingUnidadDTO> sinPosicion = new ArrayList<>();
+        for (UnidadDeVenta unidad : festivalRepository.findUnidadesByFestivalId(idFestival)) {
+            sinPosicion.add(new RankingUnidadDTO(
+                    0,
+                    unidad.getCodigo(),
+                    unidad.getNombreComercial(),
+                    unidad.getTipo(),
+                    recaudacionPorUnidad.getOrDefault(unidad.getId(), 0.0d)));
+        }
+        sinPosicion.sort(Comparator.comparingDouble(RankingUnidadDTO::recaudacion).reversed()
+                .thenComparing(RankingUnidadDTO::nombreComercial));
+
+        List<RankingUnidadDTO> ranking = new ArrayList<>();
+        for (int i = 0; i < sinPosicion.size(); i++) {
+            RankingUnidadDTO r = sinPosicion.get(i);
+            ranking.add(new RankingUnidadDTO(
+                    i + 1, r.codigo(), r.nombreComercial(), r.tipo(), r.recaudacion()));
+        }
+        return ranking;
     }
 }
