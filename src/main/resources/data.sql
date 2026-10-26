@@ -78,3 +78,16 @@ INSERT IGNORE INTO item_pedido (id, cantidad, plato_id, pedido_id) VALUES
 (6, 1, 1, 4),   -- 1 x Pizza muzzarella      =  6000
 (7, 3, 4, 5),   -- 3 x Choripán              = 12000
 (8, 4, 5, 5);   -- 4 x Empanada de carne     =  6000
+
+-- Lautaro: unidad del Festival de la Cerveza sin pedidos (CU06, ranking con recaudación 0)
+INSERT IGNORE INTO `user` (id, username, password, enabled, role_id) VALUES
+(100, 'responsable3@epicentro.com', '$2a$10$338dRDW0NVw/OzHSKj/etO5.qmeu0qh.8LL.lBnDTDVkKfailSWN.', true, 2);
+
+INSERT IGNORE INTO unidad_de_venta (id, codigo, nombre_comercial, superficie_m2, responsable_id) VALUES
+(100, 'PDS0000100', 'El Rincón Dulce', 15, 100);
+
+INSERT IGNORE INTO puesto_desarmable (id, cant_carpas, tiempo_montaje_min) VALUES
+(100, 1, 60);
+
+INSERT IGNORE INTO festival_x_unidad (festival_id, unidad_id) VALUES
+(2, 100);
