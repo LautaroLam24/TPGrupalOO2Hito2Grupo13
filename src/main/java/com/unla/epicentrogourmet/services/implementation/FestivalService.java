@@ -61,4 +61,9 @@ public class FestivalService implements IFestivalService {
         }
         return new ReporteVentaDTO(festival.getNombre(), recaudacion);
     }
+
+    @Override
+    public List<Festival> traerTodosPorFecha() {
+        return festivalRepository.findAllByOrderByFechaInicioAsc();
+    }
 }

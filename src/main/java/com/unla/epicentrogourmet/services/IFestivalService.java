@@ -12,4 +12,6 @@ public interface IFestivalService {
     List<Festival> traerDisponibles();
 
     ReporteVentaDTO reporteRecaudacion(String username, int festivalId);
+
+    List<Festival> traerTodosPorFecha();
 }
