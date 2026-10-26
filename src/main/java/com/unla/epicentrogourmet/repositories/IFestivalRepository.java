@@ -31,4 +31,6 @@ public interface IFestivalRepository extends JpaRepository<Festival, Integer> {
     Optional<Festival> findByIdAndUnidadId(
             @Param("festivalId") int festivalId,
             @Param("unidadId") int unidadId);
+
+    List<Festival> findAllByOrderByFechaInicioAsc();
 }
