@@ -27,4 +27,8 @@ public class ViewRouteHelper {
     public static final String ROUTE_REPORTES_RESPONSABLE = "/responsable/reportes";
     public static final String ROUTE_PLATO_ESTRELLA = "/responsable/reportes/plato-estrella";
     public static final String ROUTE_RECAUDACION_FESTIVAL = "/responsable/reportes/recaudacion";
+
+    // ADMIN
+    public static final String ADMIN_FESTIVALES = "admin/festivales";
+    public static final String ROUTE_ADMIN_FESTIVALES = "/admin/festivales";
 }
