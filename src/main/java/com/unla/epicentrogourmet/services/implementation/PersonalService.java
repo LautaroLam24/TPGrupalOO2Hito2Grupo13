@@ -244,12 +244,25 @@ public class PersonalService {
         return personal;
     }
 
-        @Transactional(readOnly = true)
+            @Transactional(readOnly = true)
     public List<EmpleadoListadoDTO> filtrar(String texto, String tipo) {
+        return filtrarPorEstado(texto, tipo, false);
+    }
+
+    @Transactional(readOnly = true)
+    public List<EmpleadoListadoDTO> filtrarInactivos(String texto, String tipo) {
+        return filtrarPorEstado(texto, tipo, true);
+    }
+
+    private List<EmpleadoListadoDTO> filtrarPorEstado(String texto, String tipo, boolean inactivos) {
         String busqueda = normalizar(texto);
         String tipoBuscado = tipo == null ? "" : tipo.trim();
 
-        return personalRepository.findByBajaFalse().stream()
+        List<Personal> base = inactivos
+                ? personalRepository.findByBajaTrue()
+                : personalRepository.findByBajaFalse();
+
+        return base.stream()
                 .filter(p -> tipoBuscado.isEmpty() || tipoDe(p).equals(tipoBuscado))
                 .filter(p -> busqueda.isEmpty()
                         || normalizar(p.getNombre() + " " + p.getApellido()).contains(busqueda)
@@ -307,6 +320,24 @@ public class PersonalService {
 
         personal.setBaja(true);
         personal.getUser().setEnabled(false);
+        personalRepository.save(personal);
+
+        return personal.getApellido() + ", " + personal.getNombre();
+    }
+
+        @Transactional
+    public String reactivar(int id) {
+        Personal personal = personalRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "El empleado no existe."));
+
+        if (!personal.isBaja()) {
+            throw new IllegalArgumentException(
+                    "El empleado ya está activo.");
+        }
+
+        personal.setBaja(false);
+        personal.getUser().setEnabled(true);
         personalRepository.save(personal);
 
         return personal.getApellido() + ", " + personal.getNombre();

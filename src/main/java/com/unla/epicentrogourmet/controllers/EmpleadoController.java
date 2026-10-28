@@ -51,4 +51,28 @@ public class EmpleadoController {
         }
         return "redirect:/responsable/empleados";
     }
+
+    @GetMapping("/inactivos")
+    public String listarInactivos(
+            @RequestParam(required = false) String texto,
+            @RequestParam(required = false) String tipo,
+            Model model) {
+
+        model.addAttribute("empleados", personalService.filtrarInactivos(texto, tipo));
+        model.addAttribute("texto", texto == null ? "" : texto);
+        model.addAttribute("tipo", tipo == null ? "" : tipo);
+        return "responsable/empleados/inactivos";
+    }
+
+    @PostMapping("/{id}/reactivar")
+    public String reactivar(@PathVariable int id, RedirectAttributes redirectAttributes) {
+        try {
+            String nombre = personalService.reactivar(id);
+            redirectAttributes.addFlashAttribute("mensajeExito",
+                    "Se reactivó a " + nombre + ". Ya puede iniciar sesión.");
+        } catch (IllegalArgumentException ex) {
+            redirectAttributes.addFlashAttribute("error", ex.getMessage());
+        }
+        return "redirect:/responsable/empleados/inactivos";
+    }
 }
