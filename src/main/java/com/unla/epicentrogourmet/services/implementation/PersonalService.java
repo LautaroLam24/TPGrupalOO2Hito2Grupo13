@@ -15,6 +15,11 @@ import com.unla.epicentrogourmet.repositories.IUserRepository;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.util.Locale;
+import java.text.Normalizer;
+
+import com.unla.epicentrogourmet.dto.EmpleadoListadoDTO;
+import java.util.Comparator;
+import java.util.List;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -238,4 +243,55 @@ public class PersonalService {
 
         return personal;
     }
+
+        @Transactional(readOnly = true)
+    public List<EmpleadoListadoDTO> filtrar(String texto, String tipo) {
+        String busqueda = normalizar(texto);
+        String tipoBuscado = tipo == null ? "" : tipo.trim();
+
+        return personalRepository.findByBajaFalse().stream()
+                .filter(p -> tipoBuscado.isEmpty() || tipoDe(p).equals(tipoBuscado))
+                .filter(p -> busqueda.isEmpty()
+                        || normalizar(p.getNombre() + " " + p.getApellido()).contains(busqueda)
+                        || String.valueOf(p.getDni()).contains(busqueda))
+                .sorted(Comparator.comparing(Personal::getApellido, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(Personal::getNombre, String.CASE_INSENSITIVE_ORDER))
+                .map(this::aListadoDTO)
+                .toList();
+    }
+
+    private String tipoDe(Personal p) {
+        return p instanceof Cajero ? "CAJERO" : "COCINA";
+    }
+
+        private String normalizar(String texto) {
+        if (texto == null) {
+            return "";
+        }
+        return Normalizer.normalize(texto.trim(), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(Locale.ROOT);
+    }
+
+    private EmpleadoListadoDTO aListadoDTO(Personal p) {
+        String detalle;
+        if (p instanceof Cajero cajero) {
+            detalle = "Turno " + cajero.getTurno();
+        } else if (p instanceof EmpleadoCocina cocina) {
+            detalle = String.valueOf(cocina.getCategoria());
+        } else {
+            detalle = "";
+        }
+
+        return new EmpleadoListadoDTO(
+                p.getId(),
+                p.getApellido() + ", " + p.getNombre(),
+                p.getDni(),
+                p instanceof Cajero ? "Cajero" : "Cocina",
+                detalle,
+                p.getFechaIngreso(),
+                p.calcularAntiguedad(LocalDate.now()),
+                p.getUser() != null ? p.getUser().getUsername() : "");
+    }
+
 }
