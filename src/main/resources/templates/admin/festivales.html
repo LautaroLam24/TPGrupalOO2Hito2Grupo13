@@ -21,7 +21,10 @@
 </nav>
 
 <main class="container py-5">
-    <h1 class="h3 mb-4">Festivales</h1>
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <h1 class="h3 mb-0">Festivales</h1>
+        <a th:href="@{/admin/unidades/nueva}" class="btn btn-primary">Nueva unidad de venta</a>
+    </div>
 
     <div th:if="${mensajeError != null}"
          class="alert alert-danger" th:text="${mensajeError}"></div>
@@ -62,6 +65,9 @@
                        class="btn btn-outline-success btn-sm">Ranking</a>
                     <a th:href="@{/admin/festivales/{id}/mayor-canon(id=${f.id})}"
                        class="btn btn-outline-warning btn-sm">Mayor canon</a>
+                    <a th:unless="${f.fechaFin.isBefore(#temporals.createToday())}"
+                       th:href="@{/admin/unidades/nueva(festivalId=${f.id})}"
+                       class="btn btn-outline-dark btn-sm">Agregar unidad</a>
                 </td>
             </tr>
             </tbody>
