@@ -33,7 +33,7 @@ public class SecurityConfiguration {
                 .cors(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers("/css/**", "/js/**", "/imgs/**", "/error").permitAll();
-                    auth.requestMatchers("/", "/index", "/registro/**").permitAll();
+                    auth.requestMatchers("/", "/index").permitAll();
                     auth.requestMatchers("/admin/**").hasRole("ADMIN");
                     auth.requestMatchers("/responsable/**").hasRole("RESPONSABLE");
                     auth.requestMatchers("/empleado/**").hasRole("EMPLEADO");

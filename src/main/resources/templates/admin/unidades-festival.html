@@ -32,6 +32,9 @@
         <a th:href="@{/admin/festivales}" class="btn btn-outline-secondary">Volver al listado</a>
     </div>
 
+    <div th:if="${mensajeExito != null}"
+         class="alert alert-success" th:text="${mensajeExito}"></div>
+
     <div th:if="${#lists.isEmpty(unidades)}" class="alert alert-warning">
         Este festival no tiene unidades de venta asignadas.
     </div>
