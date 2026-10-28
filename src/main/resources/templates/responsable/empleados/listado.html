@@ -18,7 +18,10 @@
 <main class="container py-5">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 mb-0">Empleados activos</h1>
-        <a class="btn btn-primary" th:href="@{/responsable/empleados/alta}">Alta de empleado</a>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary" th:href="@{/responsable/empleados/inactivos}">Ver inactivos</a>
+            <a class="btn btn-primary" th:href="@{/responsable/empleados/alta}">Alta de empleado</a>
+        </div>
     </div>
 
     <div th:if="${mensajeExito != null}" class="alert alert-success" role="alert"
