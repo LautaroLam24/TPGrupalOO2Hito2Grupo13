@@ -1,7 +1,9 @@
 package com.unla.epicentrogourmet.services.implementation;
 
 import com.unla.epicentrogourmet.dto.RankingUnidadDTO;
+import com.unla.epicentrogourmet.dto.ReporteMayoresCanonDTO;
 import com.unla.epicentrogourmet.dto.ReporteVentaDTO;
+import com.unla.epicentrogourmet.entities.Costo;
 import com.unla.epicentrogourmet.entities.Festival;
 import com.unla.epicentrogourmet.entities.FoodTruck;
 import com.unla.epicentrogourmet.entities.PuestoDesarmable;
@@ -332,6 +334,110 @@ class FestivalServiceTest {
                 () -> assertFalse(where.contains("p.fecha")),
                 () -> assertTrue(jpql.contains("group by u.id")),
                 () -> assertFalse(jpql.contains("group by u ")));
+    }
+
+    @Test
+    void unidadesMayorCanonOrdenaPorCanonDescendenteYAsignaPosiciones() {
+        prepararUnidadesConCanon();
+
+        List<ReporteMayoresCanonDTO> mayores = service.unidadesMayorCanon(FESTIVAL_ID, 3);
+
+        assertEquals(List.of(
+                new ReporteMayoresCanonDTO(1, "PDS0000001", "La Carpa Criolla", "Puesto desarmable", 9100.0d),
+                new ReporteMayoresCanonDTO(2, "FTK0000001", "Ruedas de Fuego", "Food truck", 8000.0d),
+                new ReporteMayoresCanonDTO(3, "PDS0000100", "El Rincón Dulce", "Puesto desarmable", 6900.0d)),
+                mayores);
+        verifyNoInteractions(reporteResponsableService, pedidoRepository);
+    }
+
+    @Test
+    void unidadesMayorCanonDevuelveSoloLasPrimerasX() {
+        prepararUnidadesConCanon();
+
+        List<ReporteMayoresCanonDTO> mayores = service.unidadesMayorCanon(FESTIVAL_ID, 2);
+
+        assertEquals(2, mayores.size());
+        assertEquals("La Carpa Criolla", mayores.get(0).nombreComercial());
+        assertEquals("Ruedas de Fuego", mayores.get(1).nombreComercial());
+    }
+
+    @Test
+    void unidadesMayorCanonConXMayorQueLaCantidadDevuelveTodas() {
+        prepararUnidadesConCanon();
+
+        List<ReporteMayoresCanonDTO> mayores = service.unidadesMayorCanon(FESTIVAL_ID, 10);
+
+        assertEquals(3, mayores.size());
+        assertEquals(3, mayores.get(2).posicion());
+    }
+
+    @Test
+    void unidadesMayorCanonDesempataPorNombreComercial() {
+        festival.setCosto(costo());
+        PuestoDesarmable zeta = puesto(11, "PDS0000011", "Zeta");
+        zeta.setSuperficieM2(10);
+        PuestoDesarmable alfa = puesto(12, "PDS0000012", "Alfa");
+        alfa.setSuperficieM2(10);
+        when(festivalRepository.findById(FESTIVAL_ID)).thenReturn(Optional.of(festival));
+        when(festivalRepository.findUnidadesByFestivalId(FESTIVAL_ID)).thenReturn(List.of(zeta, alfa));
+
+        List<ReporteMayoresCanonDTO> mayores = service.unidadesMayorCanon(FESTIVAL_ID, 2);
+
+        assertEquals("Alfa", mayores.get(0).nombreComercial());
+        assertEquals("Zeta", mayores.get(1).nombreComercial());
+    }
+
+    @Test
+    void unidadesMayorCanonRechazaXInvalidoSinConsultarRepositorios() {
+        assertAll(
+                () -> assertThrows(IllegalArgumentException.class,
+                        () -> service.unidadesMayorCanon(FESTIVAL_ID, 0)),
+                () -> assertThrows(IllegalArgumentException.class,
+                        () -> service.unidadesMayorCanon(FESTIVAL_ID, -3)));
+        verifyNoInteractions(festivalRepository, reporteResponsableService, pedidoRepository);
+    }
+
+    @Test
+    void unidadesMayorCanonDeFestivalSinUnidadesDevuelveListaVacia() {
+        festival.setCosto(costo());
+        when(festivalRepository.findById(FESTIVAL_ID)).thenReturn(Optional.of(festival));
+        when(festivalRepository.findUnidadesByFestivalId(FESTIVAL_ID)).thenReturn(List.of());
+
+        assertTrue(service.unidadesMayorCanon(FESTIVAL_ID, 3).isEmpty());
+    }
+
+    @Test
+    void unidadesMayorCanonDeFestivalInexistenteLanzaExcepcion() {
+        when(festivalRepository.findById(99)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class, () -> service.unidadesMayorCanon(99, 3));
+        verify(festivalRepository).findById(99);
+        verifyNoMoreInteractions(festivalRepository);
+    }
+
+    private void prepararUnidadesConCanon() {
+        festival.setCosto(costo());
+        unidadResponsable.setCodigo("FTK0000001");
+        unidadResponsable.setNombreComercial("Ruedas de Fuego");
+        unidadResponsable.setSuperficieM2(12);
+        unidadResponsable.setRequiereElectricidad(true);
+        PuestoDesarmable carpa = puesto(11, "PDS0000001", "La Carpa Criolla");
+        carpa.setSuperficieM2(20);
+        carpa.setTiempoMontajeMin(90);
+        PuestoDesarmable rincon = puesto(100, "PDS0000100", "El Rincón Dulce");
+        rincon.setSuperficieM2(15);
+        rincon.setTiempoMontajeMin(60);
+        when(festivalRepository.findById(FESTIVAL_ID)).thenReturn(Optional.of(festival));
+        when(festivalRepository.findUnidadesByFestivalId(FESTIVAL_ID))
+                .thenReturn(List.of(unidadResponsable, carpa, rincon));
+    }
+
+    private Costo costo() {
+        Costo costo = new Costo();
+        costo.setCostoSuperficie(500);
+        costo.setCostoMontaje(10);
+        costo.setPlusElectricidad(2000);
+        return costo;
     }
 
     private PuestoDesarmable puesto(int id, String codigo, String nombreComercial) {

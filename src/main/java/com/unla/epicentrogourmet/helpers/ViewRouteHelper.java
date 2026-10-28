@@ -38,5 +38,6 @@ public class ViewRouteHelper {
     public static final String ADMIN_FESTIVALES = "admin/festivales";
     public static final String ADMIN_UNIDADES_FESTIVAL = "admin/unidades-festival";
     public static final String ADMIN_RANKING_FESTIVAL = "admin/ranking-festival";
+    public static final String ADMIN_MAYOR_CANON_FESTIVAL = "admin/mayor-canon-festival";
     public static final String ROUTE_ADMIN_FESTIVALES = "/admin/festivales";
 }
