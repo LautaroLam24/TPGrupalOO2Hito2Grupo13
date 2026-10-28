@@ -294,4 +294,22 @@ public class PersonalService {
                 p.getUser() != null ? p.getUser().getUsername() : "");
     }
 
+        @Transactional
+    public String baja(int id) {
+        Personal personal = personalRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "El empleado no existe."));
+
+        if (personal.isBaja()) {
+            throw new IllegalArgumentException(
+                    "El empleado ya está dado de baja.");
+        }
+
+        personal.setBaja(true);
+        personal.getUser().setEnabled(false);
+        personalRepository.save(personal);
+
+        return personal.getApellido() + ", " + personal.getNombre();
+    }
+
 }

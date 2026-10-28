@@ -6,8 +6,11 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.unla.epicentrogourmet.dto.EmpleadoListadoDTO;
 import com.unla.epicentrogourmet.services.implementation.PersonalService;
@@ -35,5 +38,17 @@ public class EmpleadoController {
         model.addAttribute("texto", texto == null ? "" : texto);
         model.addAttribute("tipo", tipo == null ? "" : tipo);
         return "responsable/empleados/listado";
+    }
+
+    @PostMapping("/{id}/baja")
+    public String baja(@PathVariable int id, RedirectAttributes redirectAttributes) {
+        try {
+            String nombre = personalService.baja(id);
+            redirectAttributes.addFlashAttribute("mensajeExito",
+                    "Se dio de baja a " + nombre + ". Ya no puede iniciar sesión.");
+        } catch (IllegalArgumentException ex) {
+            redirectAttributes.addFlashAttribute("error", ex.getMessage());
+        }
+        return "redirect:/responsable/empleados";
     }
 }
