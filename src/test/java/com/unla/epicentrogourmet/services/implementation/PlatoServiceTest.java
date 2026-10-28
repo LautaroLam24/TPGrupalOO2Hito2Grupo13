@@ -6,6 +6,7 @@ import com.unla.epicentrogourmet.entities.FoodTruck;
 import com.unla.epicentrogourmet.exceptions.PlatoEstrellaException;
 import com.unla.epicentrogourmet.exceptions.ReporteResponsableException;
 import com.unla.epicentrogourmet.repositories.IPedidoRepository;
+import com.unla.epicentrogourmet.repositories.IUnidadDeVentaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +41,9 @@ class PlatoServiceTest {
     @Mock
     private IPedidoRepository pedidoRepository;
 
+    @Mock
+    private IUnidadDeVentaRepository unidadDeVentaRepository;
+
     private PlatoService service;
     private FoodTruck unidad;
 
@@ -47,7 +51,8 @@ class PlatoServiceTest {
     void setUp() {
         service = new PlatoService(
                 reporteResponsableService,
-                pedidoRepository);
+                pedidoRepository,
+                unidadDeVentaRepository);
 
         unidad = new FoodTruck();
         unidad.setId(10);
