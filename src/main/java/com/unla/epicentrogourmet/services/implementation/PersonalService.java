@@ -13,6 +13,7 @@ import com.unla.epicentrogourmet.repositories.IRoleRepository;
 import com.unla.epicentrogourmet.repositories.IUserRepository;
 import com.unla.epicentrogourmet.entities.UnidadDeVenta;
 import com.unla.epicentrogourmet.repositories.IUnidadDeVentaRepository;
+import com.unla.epicentrogourmet.dto.ModificarPersonalForm;
 
 import java.security.SecureRandom;
 import java.time.LocalDate;
@@ -355,5 +356,120 @@ public class PersonalService {
         personalRepository.save(personal);
 
         return personal.getApellido() + ", " + personal.getNombre();
+    }
+
+        private static final String PATRON_NOMBRE = "^\\p{L}+(?:[ '\\-]\\p{L}+)*$";
+
+    @Transactional(readOnly = true)
+    public ModificarPersonalForm obtenerParaModificar(String username, int id) {
+        Personal personal = buscarDelResponsable(username, id);
+
+        if (personal.isBaja()) {
+            throw new IllegalArgumentException(
+                    "No se puede modificar un empleado dado de baja. Reactivalo primero.");
+        }
+
+        ModificarPersonalForm form = new ModificarPersonalForm();
+        form.setNombre(personal.getNombre());
+        form.setApellido(personal.getApellido());
+        form.setDni(personal.getDni());
+        form.setFechaNacimiento(personal.getFechaNacimiento());
+        form.setFechaIngreso(personal.getFechaIngreso());
+        form.setTipoEmpleado(tipoDe(personal));
+        form.setEmail(personal.getUser().getUsername());
+
+        if (personal instanceof Cajero cajero) {
+            form.setTurno(cajero.getTurno());
+        } else if (personal instanceof EmpleadoCocina cocina) {
+            form.setCategoria(cocina.getCategoria());
+            form.setEspecialidad(cocina.getEspecialidad());
+        }
+
+        return form;
+    }
+
+    @Transactional
+    public String modificar(String username, int id, ModificarPersonalForm form) {
+        Personal personal = buscarDelResponsable(username, id);
+
+        if (personal.isBaja()) {
+            throw new IllegalArgumentException(
+                    "No se puede modificar un empleado dado de baja. Reactivalo primero.");
+        }
+
+        validarModificacion(id, form, personal);
+
+        personal.setNombre(form.getNombre().trim());
+        personal.setApellido(form.getApellido().trim());
+        personal.setDni(form.getDni());
+        personal.setFechaNacimiento(form.getFechaNacimiento());
+        personal.setFechaIngreso(form.getFechaIngreso());
+
+        if (personal instanceof Cajero cajero) {
+            cajero.setTurno(form.getTurno());
+        } else if (personal instanceof EmpleadoCocina cocina) {
+            cocina.setCategoria(form.getCategoria());
+            String especialidad = form.getEspecialidad();
+            cocina.setEspecialidad(
+                    especialidad == null || especialidad.isBlank() ? null : especialidad.trim());
+        }
+
+        try {
+            personalRepository.saveAndFlush(personal);
+        } catch (DataIntegrityViolationException ex) {
+            throw new IllegalArgumentException(
+                    "No se pudo modificar el empleado. Verificá que el DNI no esté repetido.");
+        }
+
+        return personal.getApellido() + ", " + personal.getNombre();
+    }
+
+    private void validarModificacion(int id, ModificarPersonalForm form, Personal personal) {
+
+        // VALIDACIÓN DE CARGA 1: nombre y apellido solo con letras
+        if (!form.getNombre().trim().matches(PATRON_NOMBRE)) {
+            throw new IllegalArgumentException(
+                    "El nombre solo puede contener letras, espacios, guiones y apóstrofes.");
+        }
+
+        if (!form.getApellido().trim().matches(PATRON_NOMBRE)) {
+            throw new IllegalArgumentException(
+                    "El apellido solo puede contener letras, espacios, guiones y apóstrofes.");
+        }
+
+        // VALIDACIÓN DE CARGA 2: DNI de 7 u 8 dígitos y no usado por otro empleado
+        int dni = form.getDni();
+
+        if (dni < 1_000_000 || dni > 99_999_999) {
+            throw new IllegalArgumentException(
+                    "El DNI debe tener entre 7 y 8 dígitos.");
+        }
+
+        if (personalRepository.existsByDniAndIdNot(dni, id)) {
+            throw new IllegalArgumentException(
+                    "Ya existe otro empleado con ese DNI.");
+        }
+
+        LocalDate hoy = LocalDate.now();
+
+        if (form.getFechaNacimiento().plusYears(18).isAfter(hoy)) {
+            throw new IllegalArgumentException(
+                    "El empleado debe tener al menos 18 años.");
+        }
+
+        if (form.getFechaIngreso().isBefore(form.getFechaNacimiento())) {
+            throw new IllegalArgumentException(
+                    "La fecha de ingreso no puede ser anterior a la fecha de nacimiento.");
+        }
+
+        if (personal instanceof Cajero && form.getTurno() == null) {
+            throw new IllegalArgumentException(
+                    "Debe seleccionar el turno del cajero.");
+        }
+
+        if (personal instanceof EmpleadoCocina && form.getCategoria() == null) {
+            throw new IllegalArgumentException(
+                    "Debe seleccionar la categoría de cocina.");
+        }
     }
 }

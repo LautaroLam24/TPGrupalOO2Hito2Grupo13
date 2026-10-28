@@ -6,7 +6,9 @@ import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,7 +16,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.unla.epicentrogourmet.dto.EmpleadoListadoDTO;
+import com.unla.epicentrogourmet.dto.ModificarPersonalForm;
 import com.unla.epicentrogourmet.services.implementation.PersonalService;
+
+import jakarta.validation.Valid;
 
 @Controller
 @RequestMapping("/responsable/empleados")
@@ -87,5 +92,49 @@ public class EmpleadoController {
             redirectAttributes.addFlashAttribute("error", ex.getMessage());
         }
         return "redirect:/responsable/empleados/inactivos";
+    }
+
+    @GetMapping("/{id}/editar")
+    public String mostrarEdicion(
+            @PathVariable int id,
+            Principal principal,
+            Model model,
+            RedirectAttributes redirectAttributes) {
+
+        try {
+            model.addAttribute("modificarPersonalForm",
+                    personalService.obtenerParaModificar(principal.getName(), id));
+            model.addAttribute("empleadoId", id);
+            return "responsable/empleados/editar";
+        } catch (IllegalArgumentException ex) {
+            redirectAttributes.addFlashAttribute("error", ex.getMessage());
+            return "redirect:/responsable/empleados";
+        }
+    }
+
+    @PostMapping("/{id}/editar")
+    public String editar(
+            @PathVariable int id,
+            @Valid @ModelAttribute("modificarPersonalForm") ModificarPersonalForm form,
+            BindingResult bindingResult,
+            Principal principal,
+            Model model,
+            RedirectAttributes redirectAttributes) {
+
+        model.addAttribute("empleadoId", id);
+
+        if (bindingResult.hasErrors()) {
+            return "responsable/empleados/editar";
+        }
+
+        try {
+            String nombre = personalService.modificar(principal.getName(), id, form);
+            redirectAttributes.addFlashAttribute("mensajeExito",
+                    "Se modificaron los datos de " + nombre + ".");
+            return "redirect:/responsable/empleados";
+        } catch (IllegalArgumentException ex) {
+            bindingResult.reject("modificar.personal.error", ex.getMessage());
+            return "responsable/empleados/editar";
+        }
     }
 }

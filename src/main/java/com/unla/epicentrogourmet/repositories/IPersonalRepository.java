@@ -13,6 +13,7 @@ public interface IPersonalRepository extends JpaRepository<Personal, Integer> {
     List<Personal> findByUserUsernameAndBajaFalse(String username);
     List<Personal> findByBajaTrue();
     boolean existsByDni(int dni);
+    boolean existsByDniAndIdNot(int dni, int id);
 
     @Query("select p from UnidadDeVenta u join u.staff p "
             + "where u.responsable.username = :username and p.baja = :baja")
