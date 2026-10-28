@@ -21,6 +21,11 @@
         <a class="btn btn-primary" th:href="@{/responsable/empleados/alta}">Alta de empleado</a>
     </div>
 
+    <div th:if="${mensajeExito != null}" class="alert alert-success" role="alert"
+         th:text="${mensajeExito}"></div>
+    <div th:if="${error != null}" class="alert alert-danger" role="alert"
+         th:text="${error}"></div>
+
     <div class="card shadow-sm mb-4">
         <div class="card-body">
             <form class="row g-3" method="get" th:action="@{/responsable/empleados}">
@@ -61,6 +66,7 @@
                         <th>Email</th>
                         <th>Ingreso</th>
                         <th>Antigüedad</th>
+                        <th>Acciones</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -72,6 +78,12 @@
                         <td th:text="${e.email}"></td>
                         <td th:text="${#temporals.format(e.fechaIngreso, 'dd/MM/yyyy')}"></td>
                         <td th:text="${e.antiguedad} + ' año(s)'"></td>
+                        <td>
+                            <form method="post" th:action="@{/responsable/empleados/{id}/baja(id=${e.id})}"
+                                  onsubmit="return confirm('¿Dar de baja a este empleado? No podrá iniciar sesión.');">
+                                <button type="submit" class="btn btn-outline-danger btn-sm">Dar de baja</button>
+                            </form>
+                        </td>
                     </tr>
                     </tbody>
                 </table>
