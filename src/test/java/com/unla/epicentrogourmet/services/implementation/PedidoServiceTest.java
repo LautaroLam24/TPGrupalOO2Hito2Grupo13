@@ -11,7 +11,6 @@ import com.unla.epicentrogourmet.entities.Pedido;
 import com.unla.epicentrogourmet.entities.Plato;
 import com.unla.epicentrogourmet.entities.Role;
 import com.unla.epicentrogourmet.entities.RoleName;
-import com.unla.epicentrogourmet.entities.UnidadDeVenta;
 import com.unla.epicentrogourmet.entities.User;
 import com.unla.epicentrogourmet.exceptions.AltaPedidoException;
 import com.unla.epicentrogourmet.exceptions.CierreCajaException;
@@ -37,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.never;
+
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;

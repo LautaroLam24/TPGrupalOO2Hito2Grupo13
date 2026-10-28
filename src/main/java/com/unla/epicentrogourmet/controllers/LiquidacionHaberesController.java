@@ -1,6 +1,5 @@
 package com.unla.epicentrogourmet.controllers;
 
-import com.unla.epicentrogourmet.entities.Festival;
 import com.unla.epicentrogourmet.repositories.IFestivalRepository;
 import com.unla.epicentrogourmet.services.implementation.LiquidacionHaberesService;
 import org.springframework.security.core.Authentication;
