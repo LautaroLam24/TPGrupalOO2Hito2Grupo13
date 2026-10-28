@@ -8,9 +8,6 @@ public class ViewRouteHelper {
     // USER
     public static final String USER_LOGIN = "user/login";
 
-    // UNIDAD DE VENTA
-    public static final String UNIDAD_REGISTRO = "registro/unidad-form";
-
     // PEDIDO
     public static final String PEDIDO_ALTA = "pedido/alta-pedido";
     public static final String CIERRE_CAJA = "pedido/cierre-caja";
@@ -25,7 +22,6 @@ public class ViewRouteHelper {
     public static final String PLATO_FORM = "responsable/platos/form";
 
     public static final String ROUTE_INDEX = "/index";
-    public static final String ROUTE_UNIDAD_REGISTRO = "/registro/unidad";
     public static final String ROUTE_PEDIDO_ALTA = "/empleado/pedidos/nuevo";
     public static final String ROUTE_CIERRE_CAJA = "/empleado/caja/cierre";
     public static final String ROUTE_REPORTES_RESPONSABLE = "/responsable/reportes";
@@ -39,5 +35,7 @@ public class ViewRouteHelper {
     public static final String ADMIN_UNIDADES_FESTIVAL = "admin/unidades-festival";
     public static final String ADMIN_RANKING_FESTIVAL = "admin/ranking-festival";
     public static final String ADMIN_MAYOR_CANON_FESTIVAL = "admin/mayor-canon-festival";
+    public static final String ADMIN_UNIDAD_FORM = "admin/unidad-form";
     public static final String ROUTE_ADMIN_FESTIVALES = "/admin/festivales";
+    public static final String ROUTE_ADMIN_UNIDAD_NUEVA = "/admin/unidades/nueva";
 }

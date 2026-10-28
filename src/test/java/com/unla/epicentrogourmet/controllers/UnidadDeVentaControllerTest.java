@@ -22,6 +22,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.hamcrest.Matchers.hasProperty;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -70,16 +71,38 @@ class UnidadDeVentaControllerTest {
         Festival festival = festivalDisponible();
         when(festivalService.traerDisponibles()).thenReturn(List.of(festival));
 
-        mockMvc.perform(get("/registro/unidad"))
+        mockMvc.perform(get("/admin/unidades/nueva"))
                 .andExpect(status().isOk())
-                .andExpect(view().name("registro/unidad-form"))
+                .andExpect(view().name("admin/unidad-form"))
                 .andExpect(model().attributeExists(UnidadDeVentaController.FORM_ATTRIBUTE))
                 .andExpect(model().attribute("festivales", List.of(festival)));
     }
 
     @Test
+    void getConFestivalDisponiblePreseleccionaElFestival() throws Exception {
+        when(festivalService.traerDisponibles()).thenReturn(List.of(festivalDisponible()));
+
+        mockMvc.perform(get("/admin/unidades/nueva").param("festivalId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute(
+                        UnidadDeVentaController.FORM_ATTRIBUTE,
+                        hasProperty("festivalId", is(1))));
+    }
+
+    @Test
+    void getConFestivalInexistenteNoPreselecciona() throws Exception {
+        when(festivalService.traerDisponibles()).thenReturn(List.of(festivalDisponible()));
+
+        mockMvc.perform(get("/admin/unidades/nueva").param("festivalId", "99"))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute(
+                        UnidadDeVentaController.FORM_ATTRIBUTE,
+                        hasProperty("festivalId", nullValue())));
+    }
+
+    @Test
     void postValidoRegistraYRedirigeConConfirmacion() throws Exception {
-        mockMvc.perform(post("/registro/unidad")
+        mockMvc.perform(post("/admin/unidades/nueva")
                         .param("festivalId", "1")
                         .param("tipoUnidad", "FOOD_TRUCK")
                         .param("codigo", "abcd123456")
@@ -90,9 +113,10 @@ class UnidadDeVentaControllerTest {
                         .param("patente", "aa123bb")
                         .param("requiereElectricidad", "true"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/registro/unidad"))
-                .andExpect(flash().attribute(
-                        "mensajeExito", "La unidad y su responsable se registraron correctamente."));
+                .andExpect(redirectedUrl("/admin/festivales/1/unidades"))
+                .andExpect(flash().attribute("mensajeExito",
+                        "La unidad Sabores sobre ruedas y su responsable (responsable@ejemplo.com) "
+                                + "se registraron correctamente."));
 
         ArgumentCaptor<RegistroUnidadResponsableForm> captor =
                 ArgumentCaptor.forClass(RegistroUnidadResponsableForm.class);
@@ -104,9 +128,9 @@ class UnidadDeVentaControllerTest {
     void postInvalidoVuelveAlFormularioSinInvocarServicio() throws Exception {
         when(festivalService.traerDisponibles()).thenReturn(List.of(festivalDisponible()));
 
-        mockMvc.perform(post("/registro/unidad"))
+        mockMvc.perform(post("/admin/unidades/nueva"))
                 .andExpect(status().isOk())
-                .andExpect(view().name("registro/unidad-form"))
+                .andExpect(view().name("admin/unidad-form"))
                 .andExpect(model().attributeHasFieldErrors(
                         UnidadDeVentaController.FORM_ATTRIBUTE,
                         "festivalId", "tipoUnidad", "codigo", "nombreComercial",
@@ -125,7 +149,7 @@ class UnidadDeVentaControllerTest {
                 .when(unidadDeVentaService).registrarConResponsable(any());
         when(festivalService.traerDisponibles()).thenReturn(List.of(festivalDisponible()));
 
-        mockMvc.perform(post("/registro/unidad")
+        mockMvc.perform(post("/admin/unidades/nueva")
                         .param("festivalId", "1")
                         .param("tipoUnidad", "PUESTO_DESARMABLE")
                         .param("codigo", "puesto1234")
@@ -136,7 +160,7 @@ class UnidadDeVentaControllerTest {
                         .param("cantCarpas", "2")
                         .param("tiempoMontajeMin", "30"))
                 .andExpect(status().isOk())
-                .andExpect(view().name("registro/unidad-form"))
+                .andExpect(view().name("admin/unidad-form"))
                 .andExpect(model().attributeHasErrors(UnidadDeVentaController.FORM_ATTRIBUTE))
                 .andExpect(model().attribute(
                         UnidadDeVentaController.FORM_ATTRIBUTE,
@@ -155,7 +179,7 @@ class UnidadDeVentaControllerTest {
     void emailInvalidoSeRechazaAntesDelServicio() throws Exception {
         when(festivalService.traerDisponibles()).thenReturn(List.of(festivalDisponible()));
 
-        mockMvc.perform(post("/registro/unidad")
+        mockMvc.perform(post("/admin/unidades/nueva")
                         .param("festivalId", "1")
                         .param("tipoUnidad", "PUESTO_DESARMABLE")
                         .param("codigo", "puesto1234")
