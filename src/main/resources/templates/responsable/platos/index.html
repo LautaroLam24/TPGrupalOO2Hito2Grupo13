@@ -32,11 +32,88 @@
         <div th:if="${error != null}" class="alert alert-danger" role="alert"
              th:text="${error}"></div>
 
-        <div th:if="${platos != null and #lists.isEmpty(platos)}" class="alert alert-info">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Filtrar Platos</h2>
+                <form method="get" th:action="@{/responsable/platos}" th:object="${filtros}">
+                    <div class="row g-3">
+                        <div class="col-12 col-lg-4">
+                            <label for="nombre" class="form-label">Nombre</label>
+                            <input id="nombre" type="text" class="form-control"
+                                   th:field="*{nombre}" placeholder="Ej.: pizza">
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <label for="precioVentaMinimo" class="form-label">Precio mínimo</label>
+                            <input id="precioVentaMinimo" type="number" step="any" min="0"
+                                   class="form-control" th:errorclass="is-invalid"
+                                   th:field="*{precioVentaMinimo}">
+                            <div class="invalid-feedback"
+                                 th:if="${#fields.hasErrors('precioVentaMinimo')}">
+                                Ingrese un precio mínimo numérico mayor o igual que cero.
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <label for="precioVentaMaximo" class="form-label">Precio máximo</label>
+                            <input id="precioVentaMaximo" type="number" step="any" min="0"
+                                   class="form-control" th:errorclass="is-invalid"
+                                   th:field="*{precioVentaMaximo}">
+                            <div class="invalid-feedback"
+                                 th:if="${#fields.hasErrors('precioVentaMaximo')}">
+                                Ingrese un precio máximo numérico mayor o igual que cero.
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <label for="costoProduccionMinimo" class="form-label">Costo mínimo</label>
+                            <input id="costoProduccionMinimo" type="number" step="any" min="0"
+                                   class="form-control" th:errorclass="is-invalid"
+                                   th:field="*{costoProduccionMinimo}">
+                            <div class="invalid-feedback"
+                                 th:if="${#fields.hasErrors('costoProduccionMinimo')}">
+                                Ingrese un costo mínimo numérico mayor o igual que cero.
+                            </div>
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <label for="costoProduccionMaximo" class="form-label">Costo máximo</label>
+                            <input id="costoProduccionMaximo" type="number" step="any" min="0"
+                                   class="form-control" th:errorclass="is-invalid"
+                                   th:field="*{costoProduccionMaximo}">
+                            <div class="invalid-feedback"
+                                 th:if="${#fields.hasErrors('costoProduccionMaximo')}">
+                                Ingrese un costo máximo numérico mayor o igual que cero.
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-4 col-lg-3">
+                            <label for="estado" class="form-label">Estado</label>
+                            <select id="estado" class="form-select" th:errorclass="is-invalid"
+                                    th:field="*{estado}">
+                                <option value="TODOS">Todos</option>
+                                <option value="ACTIVOS">Activos</option>
+                                <option value="INACTIVOS">Inactivos</option>
+                            </select>
+                            <div class="invalid-feedback" th:if="${#fields.hasErrors('estado')}">
+                                Seleccione un estado válido.
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-8 col-lg-9 d-flex align-items-end gap-2">
+                            <button type="submit" class="btn btn-primary">Filtrar</button>
+                            <a class="btn btn-outline-secondary" th:href="@{/responsable/platos}">Limpiar</a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div th:if="${resultadosValidos and platos != null and #lists.isEmpty(platos) and !filtrosAplicados}"
+             class="alert alert-info">
             La unidad todavía no tiene Platos registrados.
         </div>
 
-        <div th:if="${platos != null and !#lists.isEmpty(platos)}"
+        <div th:if="${resultadosValidos and platos != null and #lists.isEmpty(platos) and filtrosAplicados}"
+             class="alert alert-info">
+            No hay Platos que coincidan con los filtros seleccionados.
+        </div>
+
+        <div th:if="${resultadosValidos and platos != null and !#lists.isEmpty(platos)}"
              class="card shadow-sm">
             <div class="table-responsive">
                 <table class="table table-striped align-middle mb-0">

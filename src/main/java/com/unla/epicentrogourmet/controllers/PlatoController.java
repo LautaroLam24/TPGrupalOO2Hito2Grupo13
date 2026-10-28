@@ -1,5 +1,6 @@
 package com.unla.epicentrogourmet.controllers;
 
+import com.unla.epicentrogourmet.dto.FiltroPlatoDTO;
 import com.unla.epicentrogourmet.dto.PlatoForm;
 import com.unla.epicentrogourmet.exceptions.GestionPlatoException;
 import com.unla.epicentrogourmet.helpers.ViewRouteHelper;
@@ -23,6 +24,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class PlatoController {
 
     static final String FORM_ATTRIBUTE = "platoForm";
+    static final String FILTER_ATTRIBUTE = "filtros";
 
     private final PlatoService platoService;
 
@@ -31,12 +33,23 @@ public class PlatoController {
     }
 
     @GetMapping
-    public String listar(Authentication authentication, Model model) {
+    public String listar(
+            @Valid @ModelAttribute(FILTER_ATTRIBUTE) FiltroPlatoDTO filtros,
+            BindingResult bindingResult,
+            Authentication authentication,
+            Model model) {
+        model.addAttribute("resultadosValidos", false);
+        model.addAttribute("filtrosAplicados", tieneCriterios(filtros));
+        if (bindingResult.hasErrors()) {
+            return ViewRouteHelper.PLATOS_RESPONSABLE;
+        }
+
         try {
             PlatoService.ContextoGestionPlatos contexto =
-                    platoService.prepararGestion(nombreUsuario(authentication));
+                    platoService.filtrar(nombreUsuario(authentication), filtros);
             model.addAttribute("unidad", contexto.unidad());
             model.addAttribute("platos", contexto.platos());
+            model.addAttribute("resultadosValidos", true);
         } catch (GestionPlatoException ex) {
             model.addAttribute("error", ex.getMessage());
         }
@@ -173,6 +186,20 @@ public class PlatoController {
 
     private String nombreUsuario(Authentication authentication) {
         return authentication == null ? null : authentication.getName();
+    }
+
+    private boolean tieneCriterios(FiltroPlatoDTO filtros) {
+        if (filtros == null) {
+            return false;
+        }
+        boolean estadoEspecifico = filtros.getEstado() != null
+                && filtros.getEstado() != FiltroPlatoDTO.EstadoPlato.TODOS;
+        return (filtros.getNombre() != null && !filtros.getNombre().isBlank())
+                || filtros.getPrecioVentaMinimo() != null
+                || filtros.getPrecioVentaMaximo() != null
+                || filtros.getCostoProduccionMinimo() != null
+                || filtros.getCostoProduccionMaximo() != null
+                || estadoEspecifico;
     }
 
     private String redirigirAlListado() {
