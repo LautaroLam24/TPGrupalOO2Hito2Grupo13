@@ -1,5 +1,6 @@
 package com.unla.epicentrogourmet.controllers;
 
+import java.security.Principal;
 import java.util.List;
 
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,9 +31,11 @@ public class EmpleadoController {
     public String listar(
             @RequestParam(required = false) String texto,
             @RequestParam(required = false) String tipo,
+            Principal principal,
             Model model) {
 
-        List<EmpleadoListadoDTO> empleados = personalService.filtrar(texto, tipo);
+        List<EmpleadoListadoDTO> empleados =
+                personalService.filtrar(principal.getName(), texto, tipo);
 
         model.addAttribute("empleados", empleados);
         model.addAttribute("texto", texto == null ? "" : texto);
@@ -40,10 +43,28 @@ public class EmpleadoController {
         return "responsable/empleados/listado";
     }
 
+    @GetMapping("/inactivos")
+    public String listarInactivos(
+            @RequestParam(required = false) String texto,
+            @RequestParam(required = false) String tipo,
+            Principal principal,
+            Model model) {
+
+        model.addAttribute("empleados",
+                personalService.filtrarInactivos(principal.getName(), texto, tipo));
+        model.addAttribute("texto", texto == null ? "" : texto);
+        model.addAttribute("tipo", tipo == null ? "" : tipo);
+        return "responsable/empleados/inactivos";
+    }
+
     @PostMapping("/{id}/baja")
-    public String baja(@PathVariable int id, RedirectAttributes redirectAttributes) {
+    public String baja(
+            @PathVariable int id,
+            Principal principal,
+            RedirectAttributes redirectAttributes) {
+
         try {
-            String nombre = personalService.baja(id);
+            String nombre = personalService.baja(principal.getName(), id);
             redirectAttributes.addFlashAttribute("mensajeExito",
                     "Se dio de baja a " + nombre + ". Ya no puede iniciar sesión.");
         } catch (IllegalArgumentException ex) {
@@ -52,22 +73,14 @@ public class EmpleadoController {
         return "redirect:/responsable/empleados";
     }
 
-    @GetMapping("/inactivos")
-    public String listarInactivos(
-            @RequestParam(required = false) String texto,
-            @RequestParam(required = false) String tipo,
-            Model model) {
-
-        model.addAttribute("empleados", personalService.filtrarInactivos(texto, tipo));
-        model.addAttribute("texto", texto == null ? "" : texto);
-        model.addAttribute("tipo", tipo == null ? "" : tipo);
-        return "responsable/empleados/inactivos";
-    }
-
     @PostMapping("/{id}/reactivar")
-    public String reactivar(@PathVariable int id, RedirectAttributes redirectAttributes) {
+    public String reactivar(
+            @PathVariable int id,
+            Principal principal,
+            RedirectAttributes redirectAttributes) {
+
         try {
-            String nombre = personalService.reactivar(id);
+            String nombre = personalService.reactivar(principal.getName(), id);
             redirectAttributes.addFlashAttribute("mensajeExito",
                     "Se reactivó a " + nombre + ". Ya puede iniciar sesión.");
         } catch (IllegalArgumentException ex) {

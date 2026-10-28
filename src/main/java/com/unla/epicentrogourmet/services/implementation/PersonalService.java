@@ -11,6 +11,8 @@ import com.unla.epicentrogourmet.entities.User;
 import com.unla.epicentrogourmet.repositories.IPersonalRepository;
 import com.unla.epicentrogourmet.repositories.IRoleRepository;
 import com.unla.epicentrogourmet.repositories.IUserRepository;
+import com.unla.epicentrogourmet.entities.UnidadDeVenta;
+import com.unla.epicentrogourmet.repositories.IUnidadDeVentaRepository;
 
 import java.security.SecureRandom;
 import java.time.LocalDate;
@@ -33,6 +35,7 @@ public class PersonalService {
     private final IUserRepository userRepository;
     private final IRoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final IUnidadDeVentaRepository unidadDeVentaRepository;
 
     private static final String CARACTERES =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*";
@@ -43,18 +46,26 @@ public class PersonalService {
             IPersonalRepository personalRepository,
             IUserRepository userRepository,
             IRoleRepository roleRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+        IUnidadDeVentaRepository unidadDeVentaRepository) {
 
         this.personalRepository = personalRepository;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
+        this.unidadDeVentaRepository = unidadDeVentaRepository;
     }
 
     @Transactional
-    public CredencialesAltaDTO alta(AltaPersonalForm form) {
+     public CredencialesAltaDTO alta(AltaPersonalForm form, String usernameResponsable)  {
 
         validarDatos(form);
+
+         UnidadDeVenta unidad = unidadDeVentaRepository
+        .findByResponsableUsername(usernameResponsable).stream()
+        .findFirst()
+        .orElseThrow(() -> new IllegalArgumentException(
+                  "No se encontró una unidad de venta para el responsable autenticado."));
 
         String email = form.getEmail().trim().toLowerCase(Locale.ROOT);
 
@@ -96,6 +107,9 @@ public class PersonalService {
                             + "Verificá que el DNI y el email no estén repetidos.");
         }
 
+                // Asignar el nuevo empleado a la unidad del responsable
+        unidad.getStaff().add(personal);
+        unidadDeVentaRepository.save(unidad);
         // Se devuelve la contraseña original para poder enviarla por email.
         return new CredencialesAltaDTO(
                 personal.getNombre() + " " + personal.getApellido(),
@@ -244,25 +258,23 @@ public class PersonalService {
         return personal;
     }
 
-            @Transactional(readOnly = true)
-    public List<EmpleadoListadoDTO> filtrar(String texto, String tipo) {
-        return filtrarPorEstado(texto, tipo, false);
+        @Transactional(readOnly = true)
+    public List<EmpleadoListadoDTO> filtrar(String username, String texto, String tipo) {
+        return filtrarPorEstado(username, texto, tipo, false);
     }
 
     @Transactional(readOnly = true)
-    public List<EmpleadoListadoDTO> filtrarInactivos(String texto, String tipo) {
-        return filtrarPorEstado(texto, tipo, true);
+    public List<EmpleadoListadoDTO> filtrarInactivos(String username, String texto, String tipo) {
+        return filtrarPorEstado(username, texto, tipo, true);
     }
 
-    private List<EmpleadoListadoDTO> filtrarPorEstado(String texto, String tipo, boolean inactivos) {
+    private List<EmpleadoListadoDTO> filtrarPorEstado(
+            String username, String texto, String tipo, boolean inactivos) {
+
         String busqueda = normalizar(texto);
         String tipoBuscado = tipo == null ? "" : tipo.trim();
 
-        List<Personal> base = inactivos
-                ? personalRepository.findByBajaTrue()
-                : personalRepository.findByBajaFalse();
-
-        return base.stream()
+        return personalRepository.findByResponsableYBaja(username, inactivos).stream()
                 .filter(p -> tipoBuscado.isEmpty() || tipoDe(p).equals(tipoBuscado))
                 .filter(p -> busqueda.isEmpty()
                         || normalizar(p.getNombre() + " " + p.getApellido()).contains(busqueda)
@@ -277,7 +289,7 @@ public class PersonalService {
         return p instanceof Cajero ? "CAJERO" : "COCINA";
     }
 
-        private String normalizar(String texto) {
+    private String normalizar(String texto) {
         if (texto == null) {
             return "";
         }
@@ -307,11 +319,15 @@ public class PersonalService {
                 p.getUser() != null ? p.getUser().getUsername() : "");
     }
 
-        @Transactional
-    public String baja(int id) {
-        Personal personal = personalRepository.findById(id)
+    private Personal buscarDelResponsable(String username, int id) {
+        return personalRepository.findByIdYResponsable(username, id)
                 .orElseThrow(() -> new IllegalArgumentException(
-                        "El empleado no existe."));
+                        "El empleado no existe o no pertenece a tu unidad."));
+    }
+
+    @Transactional
+    public String baja(String username, int id) {
+        Personal personal = buscarDelResponsable(username, id);
 
         if (personal.isBaja()) {
             throw new IllegalArgumentException(
@@ -325,11 +341,9 @@ public class PersonalService {
         return personal.getApellido() + ", " + personal.getNombre();
     }
 
-        @Transactional
-    public String reactivar(int id) {
-        Personal personal = personalRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "El empleado no existe."));
+    @Transactional
+    public String reactivar(String username, int id) {
+        Personal personal = buscarDelResponsable(username, id);
 
         if (!personal.isBaja()) {
             throw new IllegalArgumentException(
@@ -342,5 +356,4 @@ public class PersonalService {
 
         return personal.getApellido() + ", " + personal.getNombre();
     }
-
 }
