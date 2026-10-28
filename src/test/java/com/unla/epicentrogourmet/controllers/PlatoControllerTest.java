@@ -1,6 +1,8 @@
 package com.unla.epicentrogourmet.controllers;
 
 import com.unla.epicentrogourmet.configuration.SecurityConfiguration;
+import com.unla.epicentrogourmet.dto.FiltroPlatoDTO;
+import com.unla.epicentrogourmet.dto.FiltroPlatoDTO.EstadoPlato;
 import com.unla.epicentrogourmet.dto.PlatoForm;
 import com.unla.epicentrogourmet.exceptions.GestionPlatoException;
 import com.unla.epicentrogourmet.services.IFestivalService;
@@ -21,7 +23,10 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
+import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasProperty;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -93,11 +98,14 @@ class PlatoControllerTest {
                 List.of(
                         new PlatoService.PlatoResumen(7, "Pizza", 1500f, 900f, true),
                         new PlatoService.PlatoResumen(8, "Empanada", 900f, 500f, false)));
-        when(platoService.prepararGestion(USERNAME)).thenReturn(contexto);
+        when(platoService.filtrar(
+                org.mockito.ArgumentMatchers.eq(USERNAME),
+                any(FiltroPlatoDTO.class))).thenReturn(contexto);
 
         mockMvc.perform(get("/responsable/platos").session(sesionResponsable()))
                 .andExpect(status().isOk())
                 .andExpect(view().name("responsable/platos/index"))
+                .andExpect(model().attributeExists("filtros"))
                 .andExpect(model().attribute("unidad", "Ruedas de Fuego"))
                 .andExpect(model().attribute("platos", contexto.platos()))
                 .andExpect(content().string(containsString("Pizza")))
@@ -105,21 +113,177 @@ class PlatoControllerTest {
                 .andExpect(content().string(containsString("Activo")))
                 .andExpect(content().string(containsString("Dado de baja")))
                 .andExpect(content().string(containsString("/responsable/platos/7/editar")))
-                .andExpect(content().string(containsString("/responsable/platos/7/baja")));
+                .andExpect(content().string(containsString("/responsable/platos/7/baja")))
+                .andExpect(content().string(containsString("href=\"/responsable/platos\"")));
 
-        verify(platoService).prepararGestion(USERNAME);
+        ArgumentCaptor<FiltroPlatoDTO> captor = ArgumentCaptor.forClass(FiltroPlatoDTO.class);
+        verify(platoService).filtrar(
+                org.mockito.ArgumentMatchers.eq(USERNAME), captor.capture());
+        assertEquals(EstadoPlato.TODOS, captor.getValue().getEstado());
     }
 
     @Test
     void errorDeListadoSeMuestraComoMensajeFuncional() throws Exception {
         String mensaje = "No se encontró una unidad de venta para el responsable autenticado.";
-        when(platoService.prepararGestion(USERNAME))
+        when(platoService.filtrar(
+                org.mockito.ArgumentMatchers.eq(USERNAME),
+                any(FiltroPlatoDTO.class)))
                 .thenThrow(new GestionPlatoException(mensaje));
 
         mockMvc.perform(get("/responsable/platos").session(sesionResponsable()))
                 .andExpect(status().isOk())
                 .andExpect(model().attribute("error", mensaje))
                 .andExpect(content().string(containsString(mensaje)));
+    }
+
+    @Test
+    void filtrosCombinadosSeEnlazanSeConservanYUsanUsernameAutenticado() throws Exception {
+        PlatoService.ContextoGestionPlatos contexto = contextoGestion(List.of(
+                new PlatoService.PlatoResumen(7, "Pizza veggie", 2500f, 1200f, true)));
+        when(platoService.filtrar(
+                org.mockito.ArgumentMatchers.eq(USERNAME),
+                any(FiltroPlatoDTO.class))).thenReturn(contexto);
+
+        mockMvc.perform(get("/responsable/platos")
+                        .session(sesionResponsable())
+                        .param("nombre", "pizza")
+                        .param("precioVentaMinimo", "1000")
+                        .param("precioVentaMaximo", "3000")
+                        .param("costoProduccionMinimo", "400")
+                        .param("costoProduccionMaximo", "1500")
+                        .param("estado", "ACTIVOS"))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute("filtros", allOf(
+                        hasProperty("nombre", is("pizza")),
+                        hasProperty("precioVentaMinimo", is(1000f)),
+                        hasProperty("precioVentaMaximo", is(3000f)),
+                        hasProperty("costoProduccionMinimo", is(400f)),
+                        hasProperty("costoProduccionMaximo", is(1500f)),
+                        hasProperty("estado", is(EstadoPlato.ACTIVOS)))))
+                .andExpect(content().string(containsString("value=\"pizza\"")))
+                .andExpect(content().string(containsString("value=\"ACTIVOS\" selected=\"selected\"")))
+                .andExpect(content().string(containsString("Pizza veggie")));
+
+        ArgumentCaptor<FiltroPlatoDTO> captor = ArgumentCaptor.forClass(FiltroPlatoDTO.class);
+        verify(platoService).filtrar(
+                org.mockito.ArgumentMatchers.eq(USERNAME), captor.capture());
+        assertEquals(1500f, captor.getValue().getCostoProduccionMaximo());
+    }
+
+    @Test
+    void estadoInactivosSeEnlazaYDelega() throws Exception {
+        when(platoService.filtrar(
+                org.mockito.ArgumentMatchers.eq(USERNAME),
+                any(FiltroPlatoDTO.class))).thenReturn(contextoGestion(List.of()));
+
+        mockMvc.perform(get("/responsable/platos")
+                        .session(sesionResponsable())
+                        .param("estado", "INACTIVOS"))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute("filtros",
+                        hasProperty("estado", is(EstadoPlato.INACTIVOS))));
+
+        ArgumentCaptor<FiltroPlatoDTO> captor = ArgumentCaptor.forClass(FiltroPlatoDTO.class);
+        verify(platoService).filtrar(
+                org.mockito.ArgumentMatchers.eq(USERNAME), captor.capture());
+        assertEquals(EstadoPlato.INACTIVOS, captor.getValue().getEstado());
+    }
+
+    @Test
+    void resultadoVacioConFiltrosMuestraMensajeYEnlaceLimpiar() throws Exception {
+        when(platoService.filtrar(
+                org.mockito.ArgumentMatchers.eq(USERNAME),
+                any(FiltroPlatoDTO.class))).thenReturn(contextoGestion(List.of()));
+
+        mockMvc.perform(get("/responsable/platos")
+                        .session(sesionResponsable())
+                        .param("nombre", "sushi"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(
+                        "No hay Platos que coincidan con los filtros seleccionados.")))
+                .andExpect(content().string(containsString("href=\"/responsable/platos\"")))
+                .andExpect(content().string(containsString("Limpiar")));
+    }
+
+    @Test
+    void errorNumericoNoEjecutaBusquedaNiMuestraResultados() throws Exception {
+        mockMvc.perform(get("/responsable/platos")
+                        .session(sesionResponsable())
+                        .param("precioVentaMinimo", "no-es-numero"))
+                .andExpect(status().isOk())
+                .andExpect(model().attributeHasFieldErrors("filtros", "precioVentaMinimo"))
+                .andExpect(model().attribute("resultadosValidos", false))
+                .andExpect(content().string(containsString(
+                        "Ingrese un precio mínimo numérico mayor o igual que cero.")))
+                .andExpect(content().string(not(containsString("<tbody>"))));
+
+        verify(platoService, never()).filtrar(any(), any());
+    }
+
+    @Test
+    void limiteNegativoNoEjecutaBusquedaYConservaElValorRechazado() throws Exception {
+        mockMvc.perform(get("/responsable/platos")
+                        .session(sesionResponsable())
+                        .param("costoProduccionMaximo", "-1"))
+                .andExpect(status().isOk())
+                .andExpect(model().attributeHasFieldErrors("filtros", "costoProduccionMaximo"))
+                .andExpect(content().string(containsString("value=\"-1.0\"")))
+                .andExpect(content().string(containsString(
+                        "Ingrese un costo máximo numérico mayor o igual que cero.")));
+
+        verify(platoService, never()).filtrar(any(), any());
+    }
+
+    @Test
+    void rangoInvertidoMuestraErrorFuncionalSinCatalogoCompleto() throws Exception {
+        String mensaje = "El precio mínimo no puede ser mayor que el precio máximo.";
+        when(platoService.filtrar(
+                org.mockito.ArgumentMatchers.eq(USERNAME),
+                any(FiltroPlatoDTO.class))).thenThrow(new GestionPlatoException(mensaje));
+
+        mockMvc.perform(get("/responsable/platos")
+                        .session(sesionResponsable())
+                        .param("precioVentaMinimo", "200")
+                        .param("precioVentaMaximo", "100"))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute("error", mensaje))
+                .andExpect(model().attribute("resultadosValidos", false))
+                .andExpect(content().string(containsString(mensaje)))
+                .andExpect(content().string(not(containsString("<tbody>"))));
+    }
+
+    @Test
+    void estadoDesconocidoGeneraErrorDeBindingSinConvertirseEnTodos() throws Exception {
+        mockMvc.perform(get("/responsable/platos")
+                        .session(sesionResponsable())
+                        .param("estado", "ARCHIVADOS"))
+                .andExpect(status().isOk())
+                .andExpect(model().attributeHasFieldErrors("filtros", "estado"))
+                .andExpect(model().attribute("resultadosValidos", false))
+                .andExpect(content().string(containsString("Seleccione un estado válido.")));
+
+        verify(platoService, never()).filtrar(any(), any());
+    }
+
+    @Test
+    void usernameYUnidadManipuladosNoAlteranElContextoAutorizado() throws Exception {
+        when(platoService.filtrar(
+                org.mockito.ArgumentMatchers.eq(USERNAME),
+                any(FiltroPlatoDTO.class))).thenReturn(contextoGestion(List.of()));
+
+        mockMvc.perform(get("/responsable/platos")
+                        .session(sesionResponsable())
+                        .param("username", "intruso@epicentro.com")
+                        .param("unidadId", "999")
+                        .param("estado", "ACTIVOS"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<FiltroPlatoDTO> captor = ArgumentCaptor.forClass(FiltroPlatoDTO.class);
+        verify(platoService).filtrar(
+                org.mockito.ArgumentMatchers.eq(USERNAME), captor.capture());
+        assertEquals(EstadoPlato.ACTIVOS, captor.getValue().getEstado());
+        verify(platoService, never()).filtrar(
+                org.mockito.ArgumentMatchers.eq("intruso@epicentro.com"), any());
     }
 
     @Test
@@ -301,6 +465,11 @@ class PlatoControllerTest {
     private PlatoService.ContextoFormularioPlato contextoAlta() {
         return new PlatoService.ContextoFormularioPlato(
                 "Ruedas de Fuego", new PlatoForm(), false);
+    }
+
+    private PlatoService.ContextoGestionPlatos contextoGestion(
+            List<PlatoService.PlatoResumen> platos) {
+        return new PlatoService.ContextoGestionPlatos("Ruedas de Fuego", platos);
     }
 
     private PlatoForm form(String nombre, Float precioVenta, Float costoProduccion) {
