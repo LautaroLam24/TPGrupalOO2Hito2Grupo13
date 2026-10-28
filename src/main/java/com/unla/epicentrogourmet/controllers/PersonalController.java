@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import java.security.Principal;
 
 @Controller
 @PreAuthorize("hasRole('RESPONSABLE')")
@@ -46,6 +47,7 @@ public class PersonalController {
             AltaPersonalForm form,
             BindingResult bindingResult,
             Model model,
+            Principal principal,
             RedirectAttributes redirectAttributes) {
 
         if (bindingResult.hasErrors()) {
@@ -55,7 +57,7 @@ public class PersonalController {
         CredencialesAltaDTO credenciales;
 
         try {
-            credenciales = personalService.alta(form);
+                    credenciales = personalService.alta(form, principal.getName());
         } catch (IllegalArgumentException ex) {
             bindingResult.reject(
                     "alta.personal.error",
