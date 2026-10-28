@@ -1,6 +1,7 @@
 package com.unla.epicentrogourmet.services.implementation;
 
 import com.unla.epicentrogourmet.dto.RankingUnidadDTO;
+import com.unla.epicentrogourmet.dto.ReporteMayoresCanonDTO;
 import com.unla.epicentrogourmet.dto.ReporteVentaDTO;
 import com.unla.epicentrogourmet.entities.Festival;
 import com.unla.epicentrogourmet.entities.UnidadDeVenta;
@@ -111,5 +112,36 @@ public class FestivalService implements IFestivalService {
                     i + 1, r.codigo(), r.nombreComercial(), r.tipo(), r.recaudacion()));
         }
         return ranking;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ReporteMayoresCanonDTO> unidadesMayorCanon(int idFestival, int x) {
+        if (x < 1) {
+            throw new IllegalArgumentException(
+                    "La cantidad de unidades debe ser un número entero mayor o igual a 1.");
+        }
+        Festival festival = traerPorId(idFestival)
+                .orElseThrow(() -> new IllegalArgumentException("El festival solicitado no existe."));
+
+        List<ReporteMayoresCanonDTO> sinPosicion = new ArrayList<>();
+        for (UnidadDeVenta unidad : traerUnidades(idFestival)) {
+            sinPosicion.add(new ReporteMayoresCanonDTO(
+                    0,
+                    unidad.getCodigo(),
+                    unidad.getNombreComercial(),
+                    unidad.getTipo(),
+                    unidad.calcularCanon(festival)));
+        }
+        sinPosicion.sort(Comparator.comparingDouble(ReporteMayoresCanonDTO::canon).reversed()
+                .thenComparing(ReporteMayoresCanonDTO::nombreComercial));
+
+        List<ReporteMayoresCanonDTO> mayores = new ArrayList<>();
+        for (int i = 0; i < Math.min(x, sinPosicion.size()); i++) {
+            ReporteMayoresCanonDTO r = sinPosicion.get(i);
+            mayores.add(new ReporteMayoresCanonDTO(
+                    i + 1, r.codigo(), r.nombreComercial(), r.tipo(), r.canon()));
+        }
+        return mayores;
     }
 }
