@@ -1,5 +1,6 @@
 package com.unla.epicentrogourmet.services.implementation;
 
+import com.unla.epicentrogourmet.dto.FiltroPlatoDTO;
 import com.unla.epicentrogourmet.dto.PlatoDTO;
 import com.unla.epicentrogourmet.dto.PlatoForm;
 import com.unla.epicentrogourmet.entities.Festival;
@@ -19,11 +20,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
 @Service
 public class PlatoService {
+
+    private static final Comparator<PlatoResumen> ORDEN_PLATOS = Comparator
+            .comparing(PlatoResumen::nombre, String.CASE_INSENSITIVE_ORDER)
+            .thenComparingInt(PlatoResumen::id);
 
     private final ReporteResponsableService reporteResponsableService;
     private final IPedidoRepository pedidoRepository;
@@ -98,10 +104,31 @@ public class PlatoService {
         UnidadDeVenta unidad = obtenerUnidadAutorizada(username);
         List<PlatoResumen> platos = obtenerPlatos(unidad).stream()
                 .map(this::crearResumen)
-                .sorted(Comparator
-                        .comparing(PlatoResumen::nombre, String.CASE_INSENSITIVE_ORDER)
-                        .thenComparingInt(PlatoResumen::id))
+                .sorted(ORDEN_PLATOS)
                 .toList();
+        return new ContextoGestionPlatos(unidad.getNombreComercial(), platos);
+    }
+
+    @Transactional(readOnly = true)
+    public ContextoGestionPlatos filtrar(String username, FiltroPlatoDTO filtros) {
+        UnidadDeVenta unidad = obtenerUnidadAutorizada(username);
+        CriteriosFiltro criterios = validarYNormalizarFiltros(filtros);
+
+        List<PlatoResumen> platos = obtenerPlatos(unidad).stream()
+                .map(this::crearResumen)
+                .filter(plato -> coincideNombre(plato, criterios.nombre()))
+                .filter(plato -> coincideRango(
+                        plato.precioVenta(),
+                        criterios.precioVentaMinimo(),
+                        criterios.precioVentaMaximo()))
+                .filter(plato -> coincideRango(
+                        plato.costoProduccion(),
+                        criterios.costoProduccionMinimo(),
+                        criterios.costoProduccionMaximo()))
+                .filter(plato -> coincideEstado(plato, criterios.estado()))
+                .sorted(ORDEN_PLATOS)
+                .toList();
+
         return new ContextoGestionPlatos(unidad.getNombreComercial(), platos);
     }
 
@@ -263,6 +290,78 @@ public class PlatoService {
         return new DatosPlato(nombre, precioVenta, costoProduccion);
     }
 
+    private CriteriosFiltro validarYNormalizarFiltros(FiltroPlatoDTO filtros) {
+        if (filtros == null) {
+            return new CriteriosFiltro(
+                    null, null, null, null, null, FiltroPlatoDTO.EstadoPlato.TODOS);
+        }
+
+        validarLimite(filtros.getPrecioVentaMinimo(), "El precio mínimo");
+        validarLimite(filtros.getPrecioVentaMaximo(), "El precio máximo");
+        validarLimite(filtros.getCostoProduccionMinimo(), "El costo mínimo");
+        validarLimite(filtros.getCostoProduccionMaximo(), "El costo máximo");
+        validarRango(
+                filtros.getPrecioVentaMinimo(),
+                filtros.getPrecioVentaMaximo(),
+                "El precio mínimo no puede ser mayor que el precio máximo.");
+        validarRango(
+                filtros.getCostoProduccionMinimo(),
+                filtros.getCostoProduccionMaximo(),
+                "El costo mínimo no puede ser mayor que el costo máximo.");
+
+        String nombre = filtros.getNombre();
+        String nombreNormalizado = nombre == null || nombre.isBlank()
+                ? null
+                : nombre.strip().toLowerCase(Locale.ROOT);
+        FiltroPlatoDTO.EstadoPlato estado = filtros.getEstado() == null
+                ? FiltroPlatoDTO.EstadoPlato.TODOS
+                : filtros.getEstado();
+
+        return new CriteriosFiltro(
+                nombreNormalizado,
+                filtros.getPrecioVentaMinimo(),
+                filtros.getPrecioVentaMaximo(),
+                filtros.getCostoProduccionMinimo(),
+                filtros.getCostoProduccionMaximo(),
+                estado);
+    }
+
+    private void validarLimite(Float limite, String campo) {
+        if (limite == null) {
+            return;
+        }
+        if (!Float.isFinite(limite)) {
+            throw new GestionPlatoException(campo + " debe ser un valor finito.");
+        }
+        if (limite < 0) {
+            throw new GestionPlatoException(campo + " no puede ser negativo.");
+        }
+    }
+
+    private void validarRango(Float minimo, Float maximo, String mensaje) {
+        if (minimo != null && maximo != null && minimo > maximo) {
+            throw new GestionPlatoException(mensaje);
+        }
+    }
+
+    private boolean coincideNombre(PlatoResumen plato, String nombreNormalizado) {
+        return nombreNormalizado == null
+                || plato.nombre().strip().toLowerCase(Locale.ROOT).contains(nombreNormalizado);
+    }
+
+    private boolean coincideRango(float valor, Float minimo, Float maximo) {
+        return (minimo == null || valor >= minimo)
+                && (maximo == null || valor <= maximo);
+    }
+
+    private boolean coincideEstado(PlatoResumen plato, FiltroPlatoDTO.EstadoPlato estado) {
+        return switch (estado) {
+            case TODOS -> true;
+            case ACTIVOS -> plato.activo();
+            case INACTIVOS -> !plato.activo();
+        };
+    }
+
     private void validarNombreDisponible(UnidadDeVenta unidad,
                                          String nombre,
                                          Integer platoIdExcluido) {
@@ -349,5 +448,14 @@ public class PlatoService {
             String nombre,
             float precioVenta,
             float costoProduccion) {
+    }
+
+    private record CriteriosFiltro(
+            String nombre,
+            Float precioVentaMinimo,
+            Float precioVentaMaximo,
+            Float costoProduccionMinimo,
+            Float costoProduccionMaximo,
+            FiltroPlatoDTO.EstadoPlato estado) {
     }
 }
