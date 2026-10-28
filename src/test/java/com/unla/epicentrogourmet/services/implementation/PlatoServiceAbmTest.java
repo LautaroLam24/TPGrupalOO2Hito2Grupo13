@@ -1,5 +1,7 @@
 package com.unla.epicentrogourmet.services.implementation;
 
+import com.unla.epicentrogourmet.dto.FiltroPlatoDTO;
+import com.unla.epicentrogourmet.dto.FiltroPlatoDTO.EstadoPlato;
 import com.unla.epicentrogourmet.dto.PlatoForm;
 import com.unla.epicentrogourmet.entities.FoodTruck;
 import com.unla.epicentrogourmet.entities.Plato;
@@ -14,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -200,6 +203,248 @@ class PlatoServiceAbmTest {
         assertFalse(contexto.platos().get(1).activo());
         assertThrows(UnsupportedOperationException.class,
                 () -> contexto.platos().add(contexto.platos().get(0)));
+    }
+
+    @Test
+    void filtrarConDtoNuloDevuelveCatalogoCompleto() {
+        cargarCatalogoParaFiltros();
+
+        PlatoService.ContextoGestionPlatos contexto = service.filtrar(USERNAME, null);
+
+        assertEquals(List.of("Agua", "Empanada", "Pizza especial", "Pizza veggie"),
+                nombres(contexto));
+    }
+
+    @Test
+    void filtrarConDtoVacioEstadoTodosONuloDevuelveCatalogoCompleto() {
+        cargarCatalogoParaFiltros();
+        FiltroPlatoDTO filtros = new FiltroPlatoDTO();
+        filtros.setEstado(null);
+
+        PlatoService.ContextoGestionPlatos contexto = service.filtrar(USERNAME, filtros);
+
+        assertEquals(4, contexto.platos().size());
+        assertTrue(contexto.platos().stream().anyMatch(PlatoService.PlatoResumen::activo));
+        assertTrue(contexto.platos().stream().anyMatch(plato -> !plato.activo()));
+    }
+
+    @Test
+    void filtrarNombreEsParcialIgnoraMayusculasYEspaciosExteriores() {
+        cargarCatalogoParaFiltros();
+        FiltroPlatoDTO filtros = filtros();
+        filtros.setNombre("  PiZzA  ");
+
+        PlatoService.ContextoGestionPlatos contexto = service.filtrar(USERNAME, filtros);
+
+        assertEquals(List.of("Pizza especial", "Pizza veggie"), nombres(contexto));
+    }
+
+    @ParameterizedTest
+    @MethodSource("nombresInvalidos")
+    void filtrarNombreNuloVacioOEnBlancoNoRestringe(String nombre) {
+        cargarCatalogoParaFiltros();
+        FiltroPlatoDTO filtros = filtros();
+        filtros.setNombre(nombre);
+
+        assertEquals(4, service.filtrar(USERNAME, filtros).platos().size());
+    }
+
+    @Test
+    void filtrarPrecioMinimoYMaximoFuncionanIndividualmente() {
+        cargarCatalogoParaFiltros();
+        FiltroPlatoDTO minimo = filtros();
+        minimo.setPrecioVentaMinimo(1500f);
+        FiltroPlatoDTO maximo = filtros();
+        maximo.setPrecioVentaMaximo(800f);
+
+        assertAll(
+                () -> assertEquals(
+                        List.of("Pizza especial", "Pizza veggie"),
+                        nombres(service.filtrar(USERNAME, minimo))),
+                () -> assertEquals(
+                        List.of("Agua", "Empanada"),
+                        nombres(service.filtrar(USERNAME, maximo))));
+    }
+
+    @Test
+    void filtrarCostoMinimoYMaximoFuncionanIndividualmente() {
+        cargarCatalogoParaFiltros();
+        FiltroPlatoDTO minimo = filtros();
+        minimo.setCostoProduccionMinimo(900f);
+        FiltroPlatoDTO maximo = filtros();
+        maximo.setCostoProduccionMaximo(400f);
+
+        assertAll(
+                () -> assertEquals(
+                        List.of("Pizza especial", "Pizza veggie"),
+                        nombres(service.filtrar(USERNAME, minimo))),
+                () -> assertEquals(
+                        List.of("Agua", "Empanada"),
+                        nombres(service.filtrar(USERNAME, maximo))));
+    }
+
+    @Test
+    void filtrarRangosIncluyeAmbosLimites() {
+        cargarCatalogoParaFiltros();
+        FiltroPlatoDTO filtros = filtros();
+        filtros.setPrecioVentaMinimo(800f);
+        filtros.setPrecioVentaMaximo(1500f);
+        filtros.setCostoProduccionMinimo(400f);
+        filtros.setCostoProduccionMaximo(900f);
+
+        assertEquals(List.of("Empanada", "Pizza especial"),
+                nombres(service.filtrar(USERNAME, filtros)));
+    }
+
+    @Test
+    void filtrarEstadoTodosActivosEInactivosRespetaBajaLogica() {
+        cargarCatalogoParaFiltros();
+        FiltroPlatoDTO todos = filtros();
+        FiltroPlatoDTO activos = filtros();
+        activos.setEstado(EstadoPlato.ACTIVOS);
+        FiltroPlatoDTO inactivos = filtros();
+        inactivos.setEstado(EstadoPlato.INACTIVOS);
+
+        assertAll(
+                () -> assertEquals(4, service.filtrar(USERNAME, todos).platos().size()),
+                () -> assertEquals(
+                        List.of("Agua", "Empanada", "Pizza veggie"),
+                        nombres(service.filtrar(USERNAME, activos))),
+                () -> assertEquals(
+                        List.of("Pizza especial"),
+                        nombres(service.filtrar(USERNAME, inactivos))));
+    }
+
+    @Test
+    void filtrarCombinaTodosLosCriteriosConAnd() {
+        cargarCatalogoParaFiltros();
+        FiltroPlatoDTO filtros = filtros();
+        filtros.setNombre("pizza");
+        filtros.setPrecioVentaMinimo(1000f);
+        filtros.setPrecioVentaMaximo(3000f);
+        filtros.setCostoProduccionMinimo(1000f);
+        filtros.setCostoProduccionMaximo(1500f);
+        filtros.setEstado(EstadoPlato.ACTIVOS);
+
+        assertEquals(List.of("Pizza veggie"), nombres(service.filtrar(USERNAME, filtros)));
+    }
+
+    @Test
+    void filtrarSinCoincidenciasDevuelveListaVaciaEInmutable() {
+        cargarCatalogoParaFiltros();
+        FiltroPlatoDTO filtros = filtros();
+        filtros.setNombre("sushi");
+
+        PlatoService.ContextoGestionPlatos contexto = service.filtrar(USERNAME, filtros);
+
+        assertTrue(contexto.platos().isEmpty());
+        assertThrows(UnsupportedOperationException.class,
+                () -> contexto.platos().add(
+                        new PlatoService.PlatoResumen(99, "Otro", 1f, 0f, true)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("limitesInvalidosDelFiltro")
+    void filtrarRechazaNegativosNanEInfinitosEnCadaLimite(
+            String campo, Float valor) {
+        FiltroPlatoDTO filtros = filtros();
+        asignarLimite(filtros, campo, valor);
+
+        GestionPlatoException error = assertThrows(
+                GestionPlatoException.class,
+                () -> service.filtrar(USERNAME, filtros));
+
+        assertTrue(error.getMessage().contains("valor finito")
+                || error.getMessage().contains("negativo"));
+        verify(unidadDeVentaRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void filtrarRechazaRangosInvertidosSinCorregirlos() {
+        FiltroPlatoDTO precio = filtros();
+        precio.setPrecioVentaMinimo(101f);
+        precio.setPrecioVentaMaximo(100f);
+        FiltroPlatoDTO costo = filtros();
+        costo.setCostoProduccionMinimo(51f);
+        costo.setCostoProduccionMaximo(50f);
+
+        assertAll(
+                () -> assertTrue(assertThrows(
+                        GestionPlatoException.class,
+                        () -> service.filtrar(USERNAME, precio)).getMessage().contains("precio")),
+                () -> assertTrue(assertThrows(
+                        GestionPlatoException.class,
+                        () -> service.filtrar(USERNAME, costo)).getMessage().contains("costo")));
+    }
+
+    @Test
+    void filtrarPermiteCeroComoLimite() {
+        cargarCatalogoParaFiltros();
+        FiltroPlatoDTO filtros = filtros();
+        filtros.setPrecioVentaMinimo(0f);
+        filtros.setCostoProduccionMinimo(0f);
+        filtros.setCostoProduccionMaximo(0f);
+
+        assertEquals(List.of("Agua"), nombres(service.filtrar(USERNAME, filtros)));
+    }
+
+    @Test
+    void filtrarSoloRecorrePlatosDeLaUnidadAutorizada() {
+        cargarCatalogoParaFiltros();
+        FoodTruck otraUnidad = unidadAutorizada("otro@epicentro.com");
+        otraUnidad.getPlatos().add(plato(99, "Pizza ajena", 1700f, 800f, false));
+        FiltroPlatoDTO filtros = filtros();
+        filtros.setNombre("pizza");
+
+        PlatoService.ContextoGestionPlatos contexto = service.filtrar(USERNAME, filtros);
+
+        assertEquals(List.of("Pizza especial", "Pizza veggie"), nombres(contexto));
+        assertFalse(nombres(contexto).contains("Pizza ajena"));
+    }
+
+    @Test
+    void filtrarMantieneOrdenPorNombreSinMayusculasYLuegoId() {
+        unidad.getPlatos().add(plato(3, "pizza", 300f, 100f, false));
+        unidad.getPlatos().add(plato(1, "Pizza", 100f, 20f, false));
+        unidad.getPlatos().add(plato(2, "alfajor", 200f, 50f, false));
+
+        PlatoService.ContextoGestionPlatos contexto = service.filtrar(USERNAME, filtros());
+
+        assertEquals(List.of(2, 1, 3),
+                contexto.platos().stream().map(PlatoService.PlatoResumen::id).toList());
+        assertThrows(UnsupportedOperationException.class,
+                () -> contexto.platos().clear());
+    }
+
+    @Test
+    void filtrarReutilizaAutorizacionParaResponsableSinUnidadDeshabilitadoORolIncorrecto() {
+        FiltroPlatoDTO filtros = filtros();
+        when(unidadDeVentaRepository.findByResponsableUsername("sinunidad@epicentro.com"))
+                .thenReturn(List.of());
+
+        assertThrows(GestionPlatoException.class,
+                () -> service.filtrar("sinunidad@epicentro.com", filtros));
+
+        unidad.getResponsable().setEnabled(false);
+        assertThrows(GestionPlatoException.class, () -> service.filtrar(USERNAME, filtros));
+
+        unidad.getResponsable().setEnabled(true);
+        unidad.getResponsable().setRole(new Role(RoleName.ROLE_EMPLEADO));
+        assertThrows(GestionPlatoException.class, () -> service.filtrar(USERNAME, filtros));
+    }
+
+    @Test
+    void filtrarEsSoloLecturaYNoUsaDependenciasDeReportes() {
+        cargarCatalogoParaFiltros();
+
+        service.filtrar(USERNAME, filtros());
+
+        verify(unidadDeVentaRepository, never()).save(any(UnidadDeVenta.class));
+        verify(unidadDeVentaRepository, never()).saveAll(any());
+        verify(unidadDeVentaRepository, never()).saveAndFlush(any());
+        verify(unidadDeVentaRepository, never()).flush();
+        verificarSinEliminaciones();
+        verifyNoInteractions(reporteResponsableService, pedidoRepository);
     }
 
     @Test
@@ -439,6 +684,31 @@ class PlatoServiceAbmTest {
         return form;
     }
 
+    private FiltroPlatoDTO filtros() {
+        return new FiltroPlatoDTO();
+    }
+
+    private List<String> nombres(PlatoService.ContextoGestionPlatos contexto) {
+        return contexto.platos().stream().map(PlatoService.PlatoResumen::nombre).toList();
+    }
+
+    private void cargarCatalogoParaFiltros() {
+        unidad.getPlatos().add(plato(4, "Agua", 100f, 0f, false));
+        unidad.getPlatos().add(plato(1, "Empanada", 800f, 400f, false));
+        unidad.getPlatos().add(plato(2, "Pizza especial", 1500f, 900f, true));
+        unidad.getPlatos().add(plato(3, "Pizza veggie", 2500f, 1200f, false));
+    }
+
+    private void asignarLimite(FiltroPlatoDTO filtros, String campo, Float valor) {
+        switch (campo) {
+            case "precioVentaMinimo" -> filtros.setPrecioVentaMinimo(valor);
+            case "precioVentaMaximo" -> filtros.setPrecioVentaMaximo(valor);
+            case "costoProduccionMinimo" -> filtros.setCostoProduccionMinimo(valor);
+            case "costoProduccionMaximo" -> filtros.setCostoProduccionMaximo(valor);
+            default -> throw new IllegalArgumentException("Campo de prueba desconocido: " + campo);
+        }
+    }
+
     private Plato plato(int id,
                         String nombre,
                         float precioVenta,
@@ -455,6 +725,19 @@ class PlatoServiceAbmTest {
 
     private static Stream<String> nombresInvalidos() {
         return Stream.of(null, "", "   ");
+    }
+
+    private static Stream<Arguments> limitesInvalidosDelFiltro() {
+        return Stream.of(
+                "precioVentaMinimo",
+                "precioVentaMaximo",
+                "costoProduccionMinimo",
+                "costoProduccionMaximo")
+                .flatMap(campo -> Stream.of(
+                        Arguments.of(campo, -1f),
+                        Arguments.of(campo, Float.NaN),
+                        Arguments.of(campo, Float.POSITIVE_INFINITY),
+                        Arguments.of(campo, Float.NEGATIVE_INFINITY)));
     }
 
     private static Stream<Float> preciosInvalidos() {
