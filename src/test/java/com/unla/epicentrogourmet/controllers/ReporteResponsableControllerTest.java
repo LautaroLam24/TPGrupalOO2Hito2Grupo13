@@ -7,6 +7,7 @@ import com.unla.epicentrogourmet.exceptions.PlatoEstrellaException;
 import com.unla.epicentrogourmet.exceptions.ReporteResponsableException;
 import com.unla.epicentrogourmet.services.IFestivalService;
 import com.unla.epicentrogourmet.services.implementation.PlatoService;
+import com.unla.epicentrogourmet.services.implementation.RentabilidadNetaService;
 import com.unla.epicentrogourmet.services.implementation.ReporteResponsableService;
 import com.unla.epicentrogourmet.services.implementation.UserService;
 import org.junit.jupiter.api.Test;
@@ -57,6 +58,9 @@ class ReporteResponsableControllerTest {
 
     @MockBean
     private IFestivalService festivalService;
+
+    @MockBean
+    private RentabilidadNetaService rentabilidadNetaService;
 
     @MockBean
     private UserService userService;
