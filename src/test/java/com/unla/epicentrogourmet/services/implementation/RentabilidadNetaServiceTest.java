@@ -106,6 +106,49 @@ class RentabilidadNetaServiceTest {
         verifyNoInteractions(pedidoRepository);
     }
 
+    @Test
+    void entreFechasProrrateaSueldosYCanonPorDias() {
+        unidad.getStaff().add(cajero(false));
+        // festival de 15 dias; rango de 3 dias -> proporcion 0.2
+        LocalDate desde = festival.getFechaInicio();
+        LocalDate hasta = desde.plusDays(2);
+        when(reporteResponsableService.autorizarFestival(USERNAME, 1))
+                .thenReturn(new ReporteResponsableService.ContextoFestivalAutorizado(unidad, festival));
+        when(pedidoRepository.sumTotalByUnidadAndFechas(10, desde, hasta)).thenReturn(30000.0);
+        when(pedidoRepository.sumCostoPlatosByUnidadAndFechas(10, desde, hasta)).thenReturn(10000.0);
+
+        ReporteRentabilidadNetaDTO reporte = service.calcularEntreFechas(USERNAME, 1, desde, hasta);
+
+        assertEquals(10000.0, reporte.sueldos(), 0.01);   // 50.000 * 0.2
+        assertEquals(2400.0, reporte.canon(), 0.01);      // 12.000 * 0.2
+        assertEquals(7600.0, reporte.rentabilidadNeta(), 0.01);
+        assertEquals(desde, reporte.fechaInicio());
+        assertEquals(hasta, reporte.fechaFin());
+    }
+
+    @Test
+    void entreFechasRechazaRangoInvertido() {
+        assertThrows(ReporteResponsableException.class, () -> service.calcularEntreFechas(
+                USERNAME, 1, festival.getFechaFin(), festival.getFechaInicio()));
+        verifyNoInteractions(pedidoRepository);
+    }
+
+    @Test
+    void entreFechasRechazaRangoFueraDelFestival() {
+        when(reporteResponsableService.autorizarFestival(USERNAME, 1))
+                .thenReturn(new ReporteResponsableService.ContextoFestivalAutorizado(unidad, festival));
+
+        assertThrows(ReporteResponsableException.class, () -> service.calcularEntreFechas(
+                USERNAME, 1, festival.getFechaInicio().minusDays(1), festival.getFechaFin()));
+        verifyNoInteractions(pedidoRepository);
+    }
+
+    @Test
+    void entreFechasRechazaFechasNulas() {
+        assertThrows(ReporteResponsableException.class,
+                () -> service.calcularEntreFechas(USERNAME, 1, null, festival.getFechaFin()));
+    }
+
     private Cajero cajero(boolean baja) {
         Cajero cajero = new Cajero();
         cajero.setFechaIngreso(festival.getFechaInicio());
