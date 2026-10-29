@@ -22,6 +22,8 @@ import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.util.Locale;
 import java.text.Normalizer;
+import com.unla.epicentrogourmet.dto.FestivalActualDTO;
+import java.time.format.DateTimeFormatter;
 
 import com.unla.epicentrogourmet.dto.EmpleadoListadoDTO;
 import java.util.Comparator;
@@ -510,5 +512,58 @@ public class PersonalService {
             return "En curso";
         }
         return festival.getFechaFin().isBefore(hoy) ? "Finalizado" : "Próximo";
+    }
+
+        @Transactional(readOnly = true)
+    public FestivalActualDTO traerFestivalActual(String username) {
+        Personal personal = personalRepository
+                .findByUserUsernameAndBajaFalse(username).stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No se encontró el empleado activo."));
+
+        UnidadDeVenta unidad = unidadDeVentaRepository.findByPersonal(personal).orElse(null);
+
+        if (unidad == null) {
+            return new FestivalActualDTO(false, false,
+                    "Todavía no tenés una unidad asignada. Consultá con tu responsable.",
+                    null, null, null, null);
+        }
+
+        LocalDate hoy = LocalDate.now();
+        DateTimeFormatter formato = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        List<Festival> festivales = festivalRepository.findByUnidadId(unidad.getId());
+
+        Festival enCurso = festivales.stream()
+                .filter(f -> f.estaActivo(hoy))
+                .findFirst()
+                .orElse(null);
+
+        if (enCurso != null) {
+            return new FestivalActualDTO(true, true,
+                    "Hoy trabajás en " + unidad.getNombreComercial()
+                            + " durante el festival " + enCurso.getNombre() + ".",
+                    unidad.getNombreComercial(), enCurso.getNombre(),
+                    enCurso.getFechaInicio(), enCurso.getFechaFin());
+        }
+
+        String mensaje = "Hoy no tenés actividad: tu unidad " + unidad.getNombreComercial()
+                + " no participa en ningún festival en curso.";
+
+        Festival proximo = festivales.stream()
+                .filter(f -> f.getFechaInicio().isAfter(hoy))
+                .min(Comparator.comparing(Festival::getFechaInicio))
+                .orElse(null);
+
+        if (proximo != null) {
+            return new FestivalActualDTO(true, false,
+                    mensaje + " Próximo festival: " + proximo.getNombre()
+                            + ", desde el " + proximo.getFechaInicio().format(formato) + ".",
+                    unidad.getNombreComercial(), proximo.getNombre(),
+                    proximo.getFechaInicio(), proximo.getFechaFin());
+        }
+
+        return new FestivalActualDTO(true, false, mensaje,
+                unidad.getNombreComercial(), null, null, null);
     }
 }
