@@ -13,10 +13,13 @@ public class PuestoDesarmable extends UnidadDeVenta {
     private int tiempoMontajeMin;
 
     @Override
-    public float calcularCanon(Festival festival) {
-        Costo costo = festival.getCosto();
-        return getSuperficieM2() * costo.getCostoSuperficie()
-                - tiempoMontajeMin * costo.getCostoMontaje();
+    public float calcularAjusteCanon(Festival festival) {
+        return -(tiempoMontajeMin * festival.getCosto().getCostoMontaje());
+    }
+
+    @Override
+    public String describirAjusteCanon(Festival festival) {
+        return "Descuento por montaje (" + tiempoMontajeMin + " min)";
     }
 
     @Override

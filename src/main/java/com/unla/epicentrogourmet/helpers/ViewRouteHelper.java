@@ -16,6 +16,7 @@ public class ViewRouteHelper {
     public static final String REPORTES_RESPONSABLE = "responsable/reportes/index";
     public static final String PLATO_ESTRELLA = "responsable/reportes/plato-estrella";
     public static final String RECAUDACION_FESTIVAL = "responsable/reportes/recaudacion";
+    public static final String CANON_UNIDAD = "responsable/reportes/canon";
 
     // PLATOS RESPONSABLE
     public static final String PLATOS_RESPONSABLE = "responsable/platos/index";
@@ -27,6 +28,7 @@ public class ViewRouteHelper {
     public static final String ROUTE_REPORTES_RESPONSABLE = "/responsable/reportes";
     public static final String ROUTE_PLATO_ESTRELLA = "/responsable/reportes/plato-estrella";
     public static final String ROUTE_RECAUDACION_FESTIVAL = "/responsable/reportes/recaudacion";
+    public static final String ROUTE_CANON_UNIDAD = "/responsable/reportes/canon";
     public static final String ROUTE_PLATOS_RESPONSABLE = "/responsable/platos";
     public static final String ROUTE_PLATO_NUEVO = "/responsable/platos/nuevo";
 
