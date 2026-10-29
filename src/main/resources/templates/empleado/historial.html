@@ -20,8 +20,12 @@
 
     <div th:if="${error != null}" class="alert alert-danger" role="alert" th:text="${error}"></div>
 
+    <div th:if="${aunNoTrabajo}" class="alert alert-info">
+        Aún no trabajaste en ningún festival: tu unidad solo tiene festivales próximos.
+    </div>
+
     <div th:if="${historial != null and #lists.isEmpty(historial)}" class="alert alert-warning">
-        Todavía no tenés una unidad asignada o tu unidad no participa en ningún festival.
+        Aún no trabajaste en ningún festival ni unidad: todavía no tenés una unidad asignada o tu unidad no participa en ningún festival.
     </div>
 
     <div class="card shadow-sm" th:if="${historial != null and !#lists.isEmpty(historial)}">
