@@ -50,7 +50,18 @@ public abstract class UnidadDeVenta {
         return codigo != null && PATRON_CODIGO.matcher(codigo).matches();
     }
 
-    public abstract float calcularCanon(Festival festival);
+    // Template Method: el canon es el costo por superficie más el ajuste propio de cada tipo de unidad
+    public float calcularCanon(Festival festival) {
+        return calcularCanonSuperficie(festival) + calcularAjusteCanon(festival);
+    }
+
+    public float calcularCanonSuperficie(Festival festival) {
+        return superficieM2 * festival.getCosto().getCostoSuperficie();
+    }
+
+    public abstract float calcularAjusteCanon(Festival festival);
+
+    public abstract String describirAjusteCanon(Festival festival);
 
     public abstract String getTipo();
 }

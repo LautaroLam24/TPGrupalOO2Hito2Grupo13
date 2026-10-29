@@ -15,13 +15,13 @@ public class FoodTruck extends UnidadDeVenta {
     private boolean requiereElectricidad;
 
     @Override
-    public float calcularCanon(Festival festival) {
-        Costo costo = festival.getCosto();
-        float canon = getSuperficieM2() * costo.getCostoSuperficie();
-        if (requiereElectricidad) {
-            canon += costo.getPlusElectricidad();
-        }
-        return canon;
+    public float calcularAjusteCanon(Festival festival) {
+        return requiereElectricidad ? festival.getCosto().getPlusElectricidad() : 0;
+    }
+
+    @Override
+    public String describirAjusteCanon(Festival festival) {
+        return requiereElectricidad ? "Plus por conexión eléctrica" : "Sin conexión eléctrica";
     }
 
     @Override
