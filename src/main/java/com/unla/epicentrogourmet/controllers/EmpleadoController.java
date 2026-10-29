@@ -17,7 +17,9 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.unla.epicentrogourmet.dto.EmpleadoListadoDTO;
 import com.unla.epicentrogourmet.dto.ModificarPersonalForm;
+import com.unla.epicentrogourmet.entities.UnidadDeVenta;
 import com.unla.epicentrogourmet.services.implementation.PersonalService;
+import com.unla.epicentrogourmet.services.implementation.UnidadDeVentaService;
 
 import jakarta.validation.Valid;
 
@@ -27,9 +29,18 @@ import jakarta.validation.Valid;
 public class EmpleadoController {
 
     private final PersonalService personalService;
+    private final UnidadDeVentaService unidadDeVentaService;
 
-    public EmpleadoController(PersonalService personalService) {
+    public EmpleadoController(PersonalService personalService,
+                              UnidadDeVentaService unidadDeVentaService) {
         this.personalService = personalService;
+        this.unidadDeVentaService = unidadDeVentaService;
+    }
+
+    // Unidad del responsable para mostrarla en el listado, inactivos y editar
+    @ModelAttribute("unidad")
+    public UnidadDeVenta unidad(Principal principal) {
+        return unidadDeVentaService.traerUnidadDelUsuario(principal.getName()).orElse(null);
     }
 
     @GetMapping
