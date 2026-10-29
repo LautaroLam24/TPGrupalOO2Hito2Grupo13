@@ -2,8 +2,10 @@ package com.unla.epicentrogourmet.controllers;
 
 import com.unla.epicentrogourmet.dto.AltaPersonalForm;
 import com.unla.epicentrogourmet.dto.CredencialesAltaDTO;
+import com.unla.epicentrogourmet.entities.UnidadDeVenta;
 import com.unla.epicentrogourmet.services.implementation.EmailService;
 import com.unla.epicentrogourmet.services.implementation.PersonalService;
+import com.unla.epicentrogourmet.services.implementation.UnidadDeVentaService;
 import jakarta.validation.Valid;
 import org.springframework.mail.MailException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,12 +24,21 @@ public class PersonalController {
 
     private final PersonalService personalService;
     private final EmailService emailService;
+    private final UnidadDeVentaService unidadDeVentaService;
 
     public PersonalController(
             PersonalService personalService,
-            EmailService emailService) {
+            EmailService emailService,
+            UnidadDeVentaService unidadDeVentaService) {
         this.personalService = personalService;
         this.emailService = emailService;
+        this.unidadDeVentaService = unidadDeVentaService;
+    }
+
+    // Unidad del responsable: queda en el modelo también cuando el POST vuelve al form con errores
+    @ModelAttribute("unidad")
+    public UnidadDeVenta unidad(Principal principal) {
+        return unidadDeVentaService.traerUnidadDelUsuario(principal.getName()).orElse(null);
     }
 
     @GetMapping("/responsable/empleados/alta")
