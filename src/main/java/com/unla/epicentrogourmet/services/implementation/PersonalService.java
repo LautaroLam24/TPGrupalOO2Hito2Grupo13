@@ -14,6 +14,9 @@ import com.unla.epicentrogourmet.repositories.IUserRepository;
 import com.unla.epicentrogourmet.entities.UnidadDeVenta;
 import com.unla.epicentrogourmet.repositories.IUnidadDeVentaRepository;
 import com.unla.epicentrogourmet.dto.ModificarPersonalForm;
+import com.unla.epicentrogourmet.dto.HistorialFestivalDTO;
+import com.unla.epicentrogourmet.entities.Festival;
+import com.unla.epicentrogourmet.repositories.IFestivalRepository;
 
 import java.security.SecureRandom;
 import java.time.LocalDate;
@@ -37,6 +40,7 @@ public class PersonalService {
     private final IRoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final IUnidadDeVentaRepository unidadDeVentaRepository;
+    private final IFestivalRepository festivalRepository;
 
     private static final String CARACTERES =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*";
@@ -48,13 +52,15 @@ public class PersonalService {
             IUserRepository userRepository,
             IRoleRepository roleRepository,
             PasswordEncoder passwordEncoder,
-        IUnidadDeVentaRepository unidadDeVentaRepository) {
+        IUnidadDeVentaRepository unidadDeVentaRepository,
+        IFestivalRepository festivalRepository) {
 
         this.personalRepository = personalRepository;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.unidadDeVentaRepository = unidadDeVentaRepository;
+        this.festivalRepository = festivalRepository;
     }
 
     @Transactional
@@ -471,5 +477,38 @@ public class PersonalService {
             throw new IllegalArgumentException(
                     "Debe seleccionar la categoría de cocina.");
         }
+    }
+
+        @Transactional(readOnly = true)
+    public List<HistorialFestivalDTO> traerHistorial(String username) {
+        Personal personal = personalRepository
+                .findByUserUsernameAndBajaFalse(username).stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No se encontró el empleado activo."));
+
+        UnidadDeVenta unidad = unidadDeVentaRepository.findByPersonal(personal).orElse(null);
+
+        if (unidad == null) {
+            return List.of();
+        }
+
+        LocalDate hoy = LocalDate.now();
+
+        return festivalRepository.findByUnidadId(unidad.getId()).stream()
+                .map(f -> new HistorialFestivalDTO(
+                        f.getNombre(),
+                        unidad.getNombreComercial(),
+                        f.getFechaInicio(),
+                        f.getFechaFin(),
+                        estadoDe(f, hoy)))
+                .toList();
+    }
+
+    private String estadoDe(Festival festival, LocalDate hoy) {
+        if (festival.estaActivo(hoy)) {
+            return "En curso";
+        }
+        return festival.getFechaFin().isBefore(hoy) ? "Finalizado" : "Próximo";
     }
 }
