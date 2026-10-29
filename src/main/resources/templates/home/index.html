@@ -48,8 +48,8 @@
   </div>
 
   <div sec:authorize="hasRole('EMPLEADO')" class="mb-4">
-    <a class="btn btn-primary me-2" th:href="@{/empleado/liquidacion}">
-      Consultar liquidación de sueldo
+    <a class="btn btn-primary me-2" th:href="@{/empleado/mis-liquidaciones}">
+      Mis liquidaciones de sueldo
     </a>
     <a class="btn btn-success" th:href="@{/empleado/pedidos/nuevo}">
       Registrar pedido
@@ -64,6 +64,7 @@
     <a class="btn btn-primary" th:href="@{/responsable/empleados/alta}">
       Alta de empleado
     </a>
+    <a class="btn btn-outline-success ms-2" th:href="@{/responsable/liquidaciones}">Liquidar sueldos</a>
     <a class="btn btn-outline-primary ms-2" th:href="@{/responsable/empleados}">Empleados</a>
     <a class="btn btn-success ms-2" th:href="@{/responsable/reportes}">
       Reportes
