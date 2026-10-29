@@ -11,6 +11,7 @@ import com.unla.epicentrogourmet.entities.User;
 import com.unla.epicentrogourmet.exceptions.RegistroUnidadException;
 import com.unla.epicentrogourmet.repositories.IFestivalRepository;
 import com.unla.epicentrogourmet.repositories.IFoodTruckRepository;
+import com.unla.epicentrogourmet.repositories.IPersonalRepository;
 import com.unla.epicentrogourmet.repositories.IRoleRepository;
 import com.unla.epicentrogourmet.repositories.IUnidadDeVentaRepository;
 import com.unla.epicentrogourmet.repositories.IUserRepository;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.Locale;
+import java.util.Optional;
 
 @Service("unidadDeVentaService")
 public class UnidadDeVentaService {
@@ -34,19 +36,37 @@ public class UnidadDeVentaService {
     private final IUserRepository userRepository;
     private final IRoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final IPersonalRepository personalRepository;
 
     public UnidadDeVentaService(IUnidadDeVentaRepository unidadDeVentaRepository,
                                 IFoodTruckRepository foodTruckRepository,
                                 IFestivalRepository festivalRepository,
                                 IUserRepository userRepository,
                                 IRoleRepository roleRepository,
-                                PasswordEncoder passwordEncoder) {
+                                PasswordEncoder passwordEncoder,
+                                IPersonalRepository personalRepository) {
         this.unidadDeVentaRepository = unidadDeVentaRepository;
         this.foodTruckRepository = foodTruckRepository;
         this.festivalRepository = festivalRepository;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
+        this.personalRepository = personalRepository;
+    }
+
+    // Unidad del usuario logueado: la que tiene a cargo (responsable) o la que lo tiene en su staff (empleado)
+    @Transactional(readOnly = true)
+    public Optional<UnidadDeVenta> traerUnidadDelUsuario(String username) {
+        Optional<UnidadDeVenta> unidadResponsable = unidadDeVentaRepository
+                .findByResponsableUsername(username).stream()
+                .findFirst();
+        if (unidadResponsable.isPresent()) {
+            return unidadResponsable;
+        }
+
+        return personalRepository.findByUserUsernameAndBajaFalse(username).stream()
+                .findFirst()
+                .flatMap(unidadDeVentaRepository::findByPersonal);
     }
 
     @Transactional

@@ -26,8 +26,20 @@
 <main class="container py-5">
   <h1 class="mb-4">Bienvenido a Epicentro Gourmet</h1>
   <div sec:authorize="hasRole('ADMIN')" class="alert alert-info">Ingresaste como Administrador.</div>
-  <div sec:authorize="hasRole('RESPONSABLE')" class="alert alert-info">Ingresaste como Responsable.</div>
-  <div sec:authorize="hasRole('EMPLEADO')" class="alert alert-info">Ingresaste como Empleado.</div>
+  <div sec:authorize="hasRole('RESPONSABLE')" class="alert alert-info">
+    <th:block th:if="${unidad != null}">
+      Ingresaste como responsable de <strong th:text="${unidad.nombreComercial}">Unidad</strong>
+      (<span th:text="${unidad.tipo}">Tipo</span> · código <span th:text="${unidad.codigo}">CODIGO</span>).
+    </th:block>
+    <th:block th:if="${unidad == null}">Ingresaste como responsable.</th:block>
+  </div>
+  <div sec:authorize="hasRole('EMPLEADO')" class="alert alert-info">
+    <th:block th:if="${unidad != null}">
+      Ingresaste como empleado de <strong th:text="${unidad.nombreComercial}">Unidad</strong>
+      (<span th:text="${unidad.tipo}">Tipo</span>).
+    </th:block>
+    <th:block th:if="${unidad == null}">Todavía no tenés una unidad de venta asignada.</th:block>
+  </div>
 
   <div sec:authorize="hasRole('ADMIN')" class="mb-4">
     <a class="btn btn-primary" th:href="@{/admin/festivales}">

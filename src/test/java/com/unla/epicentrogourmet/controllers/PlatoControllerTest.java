@@ -7,6 +7,7 @@ import com.unla.epicentrogourmet.dto.PlatoForm;
 import com.unla.epicentrogourmet.exceptions.GestionPlatoException;
 import com.unla.epicentrogourmet.services.IFestivalService;
 import com.unla.epicentrogourmet.services.implementation.PlatoService;
+import com.unla.epicentrogourmet.services.implementation.UnidadDeVentaService;
 import com.unla.epicentrogourmet.services.implementation.UserService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -63,6 +64,9 @@ class PlatoControllerTest {
 
     @MockBean
     private UserService userService;
+
+    @MockBean
+    private UnidadDeVentaService unidadDeVentaService;
 
     @Test
     void anonimoEsRedirigidoAlLogin() throws Exception {
