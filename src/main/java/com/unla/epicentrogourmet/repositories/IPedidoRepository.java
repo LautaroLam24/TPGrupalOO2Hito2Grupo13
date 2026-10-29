@@ -65,4 +65,29 @@ public interface IPedidoRepository extends JpaRepository<Pedido, Integer> {
             group by u.id
             """)
     List<Object[]> findRecaudacionPorUnidadDeFestival(@Param("festivalId") int festivalId);
+
+    @Query("""
+            select coalesce(sum(p.total), 0)
+            from UnidadDeVenta u
+            join u.pedidos p
+            where u.id = :unidadId
+              and p.fecha between :fechaInicio and :fechaFin
+            """)
+    Double sumTotalByUnidadAndFechas(
+            @Param("unidadId") int unidadId,
+            @Param("fechaInicio") LocalDate fechaInicio,
+            @Param("fechaFin") LocalDate fechaFin);
+
+    @Query("""
+            select coalesce(sum(item.cantidad * item.plato.costoProduccion), 0)
+            from UnidadDeVenta u
+            join u.pedidos p
+            join p.items item
+            where u.id = :unidadId
+              and p.fecha between :fechaInicio and :fechaFin
+            """)
+    Double sumCostoPlatosByUnidadAndFechas(
+            @Param("unidadId") int unidadId,
+            @Param("fechaInicio") LocalDate fechaInicio,
+            @Param("fechaFin") LocalDate fechaFin);
 }
