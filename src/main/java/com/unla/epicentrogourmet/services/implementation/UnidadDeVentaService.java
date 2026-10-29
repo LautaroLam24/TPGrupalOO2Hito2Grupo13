@@ -1,6 +1,8 @@
 package com.unla.epicentrogourmet.services.implementation;
 
+import com.unla.epicentrogourmet.dto.CanonUnidadDTO;
 import com.unla.epicentrogourmet.dto.RegistroUnidadResponsableForm;
+import com.unla.epicentrogourmet.dto.ReporteCanonDTO;
 import com.unla.epicentrogourmet.entities.Festival;
 import com.unla.epicentrogourmet.entities.FoodTruck;
 import com.unla.epicentrogourmet.entities.PuestoDesarmable;
@@ -9,6 +11,7 @@ import com.unla.epicentrogourmet.entities.RoleName;
 import com.unla.epicentrogourmet.entities.UnidadDeVenta;
 import com.unla.epicentrogourmet.entities.User;
 import com.unla.epicentrogourmet.exceptions.RegistroUnidadException;
+import com.unla.epicentrogourmet.exceptions.ReporteResponsableException;
 import com.unla.epicentrogourmet.repositories.IFestivalRepository;
 import com.unla.epicentrogourmet.repositories.IFoodTruckRepository;
 import com.unla.epicentrogourmet.repositories.IPersonalRepository;
@@ -21,6 +24,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -67,6 +72,68 @@ public class UnidadDeVentaService {
         return personalRepository.findByUserUsernameAndBajaFalse(username).stream()
                 .findFirst()
                 .flatMap(unidadDeVentaRepository::findByPersonal);
+    }
+
+    // CU15: canon de la unidad del responsable en cada festival en el que participa
+    @Transactional(readOnly = true)
+    public ReporteCanonDTO canonPorFestival(String username) {
+        UnidadDeVenta unidad = traerUnidadDelUsuario(username)
+                .orElseThrow(() -> new ReporteResponsableException(
+                        "No se encontró una unidad de venta para el responsable autenticado."));
+
+        LocalDate hoy = LocalDate.now();
+        List<CanonUnidadDTO> canones = festivalRepository.findByUnidadId(unidad.getId()).stream()
+                .sorted(Comparator.comparing(Festival::getFechaInicio))
+                .map(festival -> crearCanon(unidad, festival, hoy))
+                .toList();
+        double canonTotal = canones.stream().mapToDouble(CanonUnidadDTO::canon).sum();
+
+        Boolean requiereElectricidad = null;
+        Integer cantCarpas = null;
+        Integer tiempoMontajeMin = null;
+        if (unidad instanceof FoodTruck foodTruck) {
+            requiereElectricidad = foodTruck.isRequiereElectricidad();
+        } else if (unidad instanceof PuestoDesarmable puesto) {
+            cantCarpas = puesto.getCantCarpas();
+            tiempoMontajeMin = puesto.getTiempoMontajeMin();
+        }
+
+        return new ReporteCanonDTO(
+                unidad.getNombreComercial(),
+                unidad.getTipo(),
+                unidad.getCodigo(),
+                unidad.getSuperficieM2(),
+                requiereElectricidad,
+                cantCarpas,
+                tiempoMontajeMin,
+                canones,
+                canonTotal);
+    }
+
+    private CanonUnidadDTO crearCanon(UnidadDeVenta unidad, Festival festival, LocalDate hoy) {
+        float costoUnitarioAjuste = unidad instanceof PuestoDesarmable
+                ? festival.getCosto().getCostoMontaje()
+                : festival.getCosto().getPlusElectricidad();
+
+        return new CanonUnidadDTO(
+                festival.getNombre(),
+                festival.getFechaInicio(),
+                festival.getFechaFin(),
+                estadoFestival(festival, hoy),
+                unidad.getSuperficieM2(),
+                festival.getCosto().getCostoSuperficie(),
+                unidad.calcularCanonSuperficie(festival),
+                unidad.describirAjusteCanon(festival),
+                costoUnitarioAjuste,
+                unidad.calcularAjusteCanon(festival),
+                unidad.calcularCanon(festival));
+    }
+
+    private String estadoFestival(Festival festival, LocalDate hoy) {
+        if (festival.getFechaFin().isBefore(hoy)) {
+            return "Finalizado";
+        }
+        return festival.estaActivo(hoy) ? "En curso" : "Próximo";
     }
 
     @Transactional

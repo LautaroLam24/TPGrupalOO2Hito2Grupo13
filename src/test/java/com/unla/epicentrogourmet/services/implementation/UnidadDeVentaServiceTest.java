@@ -1,6 +1,9 @@
 package com.unla.epicentrogourmet.services.implementation;
 
+import com.unla.epicentrogourmet.dto.CanonUnidadDTO;
 import com.unla.epicentrogourmet.dto.RegistroUnidadResponsableForm;
+import com.unla.epicentrogourmet.dto.ReporteCanonDTO;
+import com.unla.epicentrogourmet.entities.Costo;
 import com.unla.epicentrogourmet.entities.Festival;
 import com.unla.epicentrogourmet.entities.FoodTruck;
 import com.unla.epicentrogourmet.entities.Personal;
@@ -10,6 +13,7 @@ import com.unla.epicentrogourmet.entities.RoleName;
 import com.unla.epicentrogourmet.entities.UnidadDeVenta;
 import com.unla.epicentrogourmet.entities.User;
 import com.unla.epicentrogourmet.exceptions.RegistroUnidadException;
+import com.unla.epicentrogourmet.exceptions.ReporteResponsableException;
 import com.unla.epicentrogourmet.repositories.IFestivalRepository;
 import com.unla.epicentrogourmet.repositories.IFoodTruckRepository;
 import com.unla.epicentrogourmet.repositories.IPersonalRepository;
@@ -33,6 +37,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -410,5 +415,157 @@ class UnidadDeVentaServiceTest {
         form.setUsername("responsable@ejemplo.com");
         form.setPassword("secreta");
         return form;
+    }
+
+    // CU15: canon de la unidad por festival
+
+    private static final String RESPONSABLE_CANON = "responsable1@epicentro.com";
+
+    @Test
+    void canonPorFestivalDeFoodTruckConElectricidadSumaElPlus() {
+        FoodTruck foodTruck = foodTruckCanon(true);
+        Festival festival = festivalConCosto("Festival de la Cerveza", -5, 10, 500f, 10f, 2000f);
+        prepararCanon(foodTruck, List.of(festival));
+
+        ReporteCanonDTO reporte = service.canonPorFestival(RESPONSABLE_CANON);
+
+        assertEquals("Ruedas de Fuego", reporte.nombreComercial());
+        assertEquals("Food truck", reporte.tipo());
+        assertEquals("FTK0000001", reporte.codigo());
+        assertEquals(12f, reporte.superficieM2());
+        assertEquals(Boolean.TRUE, reporte.requiereElectricidad());
+        assertNull(reporte.cantCarpas());
+        assertNull(reporte.tiempoMontajeMin());
+
+        CanonUnidadDTO canon = reporte.canones().get(0);
+        assertEquals("Festival de la Cerveza", canon.festival());
+        assertEquals("En curso", canon.estado());
+        assertEquals(500f, canon.costoSuperficie());
+        assertEquals(6000.0d, canon.subtotalSuperficie());
+        assertEquals("Plus por conexión eléctrica", canon.conceptoAjuste());
+        assertEquals(2000f, canon.costoUnitarioAjuste());
+        assertEquals(2000.0d, canon.ajuste());
+        assertEquals(8000.0d, canon.canon());
+        assertEquals(8000.0d, reporte.canonTotal());
+    }
+
+    @Test
+    void canonPorFestivalDeFoodTruckSinElectricidadNoSumaPlus() {
+        FoodTruck foodTruck = foodTruckCanon(false);
+        Festival festival = festivalConCosto("Festival de la Cerveza", -5, 10, 500f, 10f, 2000f);
+        prepararCanon(foodTruck, List.of(festival));
+
+        ReporteCanonDTO reporte = service.canonPorFestival(RESPONSABLE_CANON);
+
+        CanonUnidadDTO canon = reporte.canones().get(0);
+        assertEquals(Boolean.FALSE, reporte.requiereElectricidad());
+        assertEquals("Sin conexión eléctrica", canon.conceptoAjuste());
+        assertEquals(0.0d, canon.ajuste());
+        assertEquals(6000.0d, canon.canon());
+        assertEquals(6000.0d, reporte.canonTotal());
+    }
+
+    @Test
+    void canonPorFestivalDePuestoDescuentaElMontaje() {
+        PuestoDesarmable puesto = new PuestoDesarmable();
+        puesto.setId(2);
+        puesto.setCodigo("PDS0000001");
+        puesto.setNombreComercial("La Carpa Criolla");
+        puesto.setSuperficieM2(20f);
+        puesto.setCantCarpas(2);
+        puesto.setTiempoMontajeMin(90);
+        Festival festival = festivalConCosto("Festival de la Cerveza", -5, 10, 500f, 10f, 2000f);
+        prepararCanon(puesto, List.of(festival));
+
+        ReporteCanonDTO reporte = service.canonPorFestival(RESPONSABLE_CANON);
+
+        assertEquals("Puesto desarmable", reporte.tipo());
+        assertNull(reporte.requiereElectricidad());
+        assertEquals(2, reporte.cantCarpas());
+        assertEquals(90, reporte.tiempoMontajeMin());
+
+        CanonUnidadDTO canon = reporte.canones().get(0);
+        assertEquals(10000.0d, canon.subtotalSuperficie());
+        assertEquals("Descuento por montaje (90 min)", canon.conceptoAjuste());
+        assertEquals(10f, canon.costoUnitarioAjuste());
+        assertEquals(-900.0d, canon.ajuste());
+        assertEquals(9100.0d, canon.canon());
+        assertEquals(9100.0d, reporte.canonTotal());
+    }
+
+    @Test
+    void canonPorFestivalUsaLosCostosDeCadaFestivalOrdenaPorInicioYSumaElTotal() {
+        FoodTruck foodTruck = foodTruckCanon(true);
+        Festival vegano = festivalConCosto("Festival Vegano", 30, 40, 600f, 10f, 2500f);
+        Festival cerveza = festivalConCosto("Festival de la Cerveza", -5, 10, 500f, 10f, 2000f);
+        Festival pizza = festivalConCosto("Festival de la Pizza", -60, -40, 500f, 10f, 2000f);
+        // el repositorio los devuelve por fecha de inicio descendente
+        prepararCanon(foodTruck, List.of(vegano, cerveza, pizza));
+
+        ReporteCanonDTO reporte = service.canonPorFestival(RESPONSABLE_CANON);
+
+        assertEquals(
+                List.of("Festival de la Pizza", "Festival de la Cerveza", "Festival Vegano"),
+                reporte.canones().stream().map(CanonUnidadDTO::festival).toList());
+        assertEquals(
+                List.of("Finalizado", "En curso", "Próximo"),
+                reporte.canones().stream().map(CanonUnidadDTO::estado).toList());
+        assertEquals(
+                List.of(8000.0d, 8000.0d, 9700.0d),
+                reporte.canones().stream().map(CanonUnidadDTO::canon).toList());
+        assertEquals(7200.0d, reporte.canones().get(2).subtotalSuperficie());
+        assertEquals(2500.0d, reporte.canones().get(2).ajuste());
+        assertEquals(25700.0d, reporte.canonTotal());
+    }
+
+    @Test
+    void canonPorFestivalDeUnidadSinFestivalesDevuelveListaVaciaYTotalCero() {
+        prepararCanon(foodTruckCanon(true), List.of());
+
+        ReporteCanonDTO reporte = service.canonPorFestival(RESPONSABLE_CANON);
+
+        assertEquals("Ruedas de Fuego", reporte.nombreComercial());
+        assertTrue(reporte.canones().isEmpty());
+        assertEquals(0.0d, reporte.canonTotal());
+    }
+
+    @Test
+    void canonPorFestivalSinUnidadLanzaExcepcion() {
+        when(unidadDeVentaRepository.findByResponsableUsername(RESPONSABLE_CANON)).thenReturn(List.of());
+        when(personalRepository.findByUserUsernameAndBajaFalse(RESPONSABLE_CANON)).thenReturn(List.of());
+
+        assertThrows(ReporteResponsableException.class,
+                () -> service.canonPorFestival(RESPONSABLE_CANON));
+        verifyNoInteractions(festivalRepository);
+    }
+
+    private void prepararCanon(UnidadDeVenta unidad, List<Festival> festivales) {
+        when(unidadDeVentaRepository.findByResponsableUsername(RESPONSABLE_CANON)).thenReturn(List.of(unidad));
+        when(festivalRepository.findByUnidadId(unidad.getId())).thenReturn(festivales);
+    }
+
+    private FoodTruck foodTruckCanon(boolean requiereElectricidad) {
+        FoodTruck foodTruck = new FoodTruck();
+        foodTruck.setId(1);
+        foodTruck.setCodigo("FTK0000001");
+        foodTruck.setNombreComercial("Ruedas de Fuego");
+        foodTruck.setSuperficieM2(12f);
+        foodTruck.setRequiereElectricidad(requiereElectricidad);
+        return foodTruck;
+    }
+
+    private Festival festivalConCosto(String nombre, int diasInicio, int diasFin,
+                                      float costoSuperficie, float costoMontaje, float plusElectricidad) {
+        Costo costo = new Costo();
+        costo.setCostoSuperficie(costoSuperficie);
+        costo.setCostoMontaje(costoMontaje);
+        costo.setPlusElectricidad(plusElectricidad);
+
+        Festival festival = new Festival();
+        festival.setNombre(nombre);
+        festival.setFechaInicio(LocalDate.now().plusDays(diasInicio));
+        festival.setFechaFin(LocalDate.now().plusDays(diasFin));
+        festival.setCosto(costo);
+        return festival;
     }
 }
