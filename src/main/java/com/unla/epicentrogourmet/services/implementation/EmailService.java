@@ -2,6 +2,9 @@
 package com.unla.epicentrogourmet.services.implementation;
 
 import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
@@ -39,4 +42,20 @@ public class EmailService {
 
         mailSender.send(mensaje);
     }
+
+    public void enviarLiquidacion(String destinatario, String nombreEmpleado, String periodo, byte[] pdf) {
+        try {
+            MimeMessage mensaje = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mensaje, true, "UTF-8");
+            helper.setTo(destinatario);
+            helper.setSubject("Epicentro Gourmet - Liquidacion de haberes " + periodo);
+            helper.setText("Hola " + nombreEmpleado + ",\n\nTu liquidacion de haberes del periodo " + periodo
+                    + " ya esta disponible en Epicentro Gourmet. Adjuntamos el PDF con el detalle del calculo.\n\nSaludos,\nEquipo Epicentro Gourmet");
+            helper.addAttachment("liquidacion-" + periodo + ".pdf", () -> new java.io.ByteArrayInputStream(pdf));
+            mailSender.send(mensaje);
+        } catch (MessagingException e) {
+            throw new org.springframework.mail.MailSendException("No se pudo preparar el correo de liquidacion.", e);
+        }
+    }
+
 }

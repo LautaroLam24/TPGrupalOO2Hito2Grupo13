@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Liquidación de haberes - Responsable</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-dark bg-dark"><div class="container"><a class="navbar-brand" th:href="@{/index}">Epicentro Gourmet</a><a class="btn btn-outline-light btn-sm" th:href="@{/index}">Volver al inicio</a></div></nav>
+<main class="container py-5" style="max-width: 950px">
+  <h1 class="h3 mb-2">Liquidación mensual de haberes</h1>
+  <p class="text-muted">Seleccioná un empleado, un festival en el que participa la unidad y el mes trabajado. Revisá el cálculo antes de enviarlo.</p>
+  <div th:if="${mensaje != null}" class="alert alert-success" th:text="${mensaje}"></div>
+  <div th:if="${error != null}" class="alert alert-danger" th:text="${error}"></div>
+  <section class="card shadow-sm mb-4"><div class="card-body p-4">
+    <form method="post" th:action="@{/responsable/liquidaciones/calcular}">
+      <div class="row g-3">
+        <div class="col-md-4"><label class="form-label" for="empleadoId">Empleado disponible</label>
+          <select class="form-select" id="empleadoId" name="empleadoId" required>
+            <option value="">Seleccionar empleado...</option><option th:each="e : ${empleados}" th:value="${e.id}" th:text="${e.nombre + ' ' + e.apellido + ' (' + e.user.username + ')'}"></option>
+          </select></div>
+        <div class="col-md-4"><label class="form-label" for="festivalId">Festival / período trabajado</label>
+          <select class="form-select" id="festivalId" name="festivalId" required><option value="">Seleccionar festival...</option>
+            <option th:each="f : ${festivales}" th:value="${f.id}" th:attr="data-inicio=${f.fechaInicio},data-fin=${f.fechaFin}" th:text="${f.nombre + ' (' + (#numbers.formatInteger(f.fechaInicio.dayOfMonth, 2) + '/' + #numbers.formatInteger(f.fechaInicio.monthValue, 2) + '/' + f.fechaInicio.year) + ' al ' + (#numbers.formatInteger(f.fechaFin.dayOfMonth, 2) + '/' + #numbers.formatInteger(f.fechaFin.monthValue, 2) + '/' + f.fechaFin.year) + ')'}"></option>
+          </select></div>
+        <div class="col-md-4"><label class="form-label" for="periodo">Mes a liquidar</label><select class="form-select" id="periodo" name="periodo" required disabled><option value="">Primero seleccioná empleado y festival...</option></select></div>
+      </div>
+      <div class="form-text mt-2">Solo se calcularán los días en los que el festival estuvo activo dentro del mes seleccionado. Si no hubo actividad, no se genera liquidación.</div>
+      <button class="btn btn-primary mt-3" type="submit">Calcular liquidación</button>
+    </form>
+  </div></section>
+  <section th:if="${liquidacion != null}" class="card shadow-sm"><div class="card-header bg-white"><h2 class="h5 mb-0">Detalle previo al envío</h2></div><div class="card-body p-4">
+    <div class="row g-3 mb-3">
+      <div class="col-md-6"><span class="text-muted small">Empleado</span><div class="fw-semibold" th:text="${liquidacion.empleado}"></div><div class="small" th:text="${liquidacion.email}"></div></div>
+      <div class="col-md-6"><span class="text-muted small">Período / festival</span><div class="fw-semibold" th:text="${liquidacion.periodo + ' · ' + liquidacion.festival}"></div></div>
+      <div class="col-md-6"><span class="text-muted small">Días trabajados en el mes</span><div th:text="${liquidacion.diasTrabajados + ' de ' + liquidacion.diasFestival + ' días del festival'}"></div></div>
+    </div>
+    <h3 class="h6">Cómo se calcula</h3>
+    <table class="table table-sm"><tbody>
+      <tr><th>Sueldo base del festival</th><td class="text-end" th:text="${'$ ' + #numbers.formatDecimal(liquidacion.sueldoBase, 1, 2)}"></td></tr>
+      <tr><th>Adicionales (antigüedad o categoría)</th><td class="text-end" th:text="${'$ ' + #numbers.formatDecimal(liquidacion.adicionales, 1, 2)}"></td></tr>
+      <tr><th>Proporción según días trabajados</th><td class="text-end" th:text="${#numbers.formatDecimal(liquidacion.factor, 1, 4)}"></td></tr>
+      <tr class="table-light"><th>(Base + adicionales) × proporción trabajada</th><td class="text-end fw-bold" th:text="${'$ ' + #numbers.formatDecimal(liquidacion.sueldoTotal, 1, 2)}"></td></tr>
+    </tbody></table>
+    <form method="post" th:action="@{/responsable/liquidaciones/enviar}">
+      <input type="hidden" name="empleadoId" th:value="${liquidacion.empleadoId}"><input type="hidden" name="festivalId" th:value="${liquidacion.festivalId}"><input type="hidden" name="periodo" th:value="${liquidacion.periodo}">
+      <button class="btn btn-success" type="submit">Enviar al empleado y generar PDF</button>
+    </form>
+  </div></section>
+</main>
+<script>
+(() => {
+  const empleado = document.getElementById('empleadoId');
+  const festival = document.getElementById('festivalId');
+  const periodo = document.getElementById('periodo');
+  const nombreMes = new Intl.DateTimeFormat('es-AR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+  function actualizarMeses() {
+    periodo.innerHTML = '';
+    const opcionInicial = document.createElement('option');
+    opcionInicial.value = '';
+    opcionInicial.textContent = 'Seleccionar mes...';
+    periodo.appendChild(opcionInicial);
+
+    const seleccionado = festival.options[festival.selectedIndex];
+    if (!empleado.value || !seleccionado || !seleccionado.dataset.inicio || !seleccionado.dataset.fin) {
+      periodo.disabled = true;
+      opcionInicial.textContent = 'Primero seleccioná empleado y festival...';
+      return;
+    }
+
+    const inicio = seleccionado.dataset.inicio.split('-').map(Number);
+    const fin = seleccionado.dataset.fin.split('-').map(Number);
+    let year = inicio[0], month = inicio[1];
+    const finYear = fin[0], finMonth = fin[1];
+    while (year < finYear || (year === finYear && month <= finMonth)) {
+      const valor = `${year}-${String(month).padStart(2, '0')}`;
+      const fecha = new Date(Date.UTC(year, month - 1, 1));
+      const opcion = document.createElement('option');
+      opcion.value = valor;
+      opcion.textContent = nombreMes.format(fecha);
+      periodo.appendChild(opcion);
+      month++;
+      if (month > 12) { month = 1; year++; }
+    }
+    periodo.disabled = false;
+  }
+
+  empleado.addEventListener('change', actualizarMeses);
+  festival.addEventListener('change', actualizarMeses);
+  actualizarMeses();
+})();
+</script>
+</body></html>
