@@ -3,6 +3,7 @@ package com.unla.epicentrogourmet.services.implementation;
 import com.unla.epicentrogourmet.dto.RegistroUnidadResponsableForm;
 import com.unla.epicentrogourmet.entities.Festival;
 import com.unla.epicentrogourmet.entities.FoodTruck;
+import com.unla.epicentrogourmet.entities.Personal;
 import com.unla.epicentrogourmet.entities.PuestoDesarmable;
 import com.unla.epicentrogourmet.entities.Role;
 import com.unla.epicentrogourmet.entities.RoleName;
@@ -11,6 +12,7 @@ import com.unla.epicentrogourmet.entities.User;
 import com.unla.epicentrogourmet.exceptions.RegistroUnidadException;
 import com.unla.epicentrogourmet.repositories.IFestivalRepository;
 import com.unla.epicentrogourmet.repositories.IFoodTruckRepository;
+import com.unla.epicentrogourmet.repositories.IPersonalRepository;
 import com.unla.epicentrogourmet.repositories.IRoleRepository;
 import com.unla.epicentrogourmet.repositories.IUnidadDeVentaRepository;
 import com.unla.epicentrogourmet.repositories.IUserRepository;
@@ -25,6 +27,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -35,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -61,6 +65,9 @@ class UnidadDeVentaServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private IPersonalRepository personalRepository;
+
     private UnidadDeVentaService service;
 
     @BeforeEach
@@ -71,7 +78,8 @@ class UnidadDeVentaServiceTest {
                 festivalRepository,
                 userRepository,
                 roleRepository,
-                passwordEncoder);
+                passwordEncoder,
+                personalRepository);
     }
 
     @Test
@@ -302,6 +310,39 @@ class UnidadDeVentaServiceTest {
         assertEquals(
                 "No se pudo registrar la unidad porque alguno de sus datos únicos ya existe.",
                 error.getMessage());
+    }
+
+    @Test
+    void traeLaUnidadDelResponsable() {
+        FoodTruck unidad = new FoodTruck();
+        when(unidadDeVentaRepository.findByResponsableUsername("responsable@test.com"))
+                .thenReturn(List.of(unidad));
+
+        Optional<UnidadDeVenta> resultado = service.traerUnidadDelUsuario("responsable@test.com");
+
+        assertSame(unidad, resultado.orElseThrow());
+        verifyNoInteractions(personalRepository);
+    }
+
+    @Test
+    void traeLaUnidadDelEmpleado() {
+        Personal empleado = mock(Personal.class);
+        PuestoDesarmable unidad = new PuestoDesarmable();
+        when(unidadDeVentaRepository.findByResponsableUsername("empleado@test.com")).thenReturn(List.of());
+        when(personalRepository.findByUserUsernameAndBajaFalse("empleado@test.com")).thenReturn(List.of(empleado));
+        when(unidadDeVentaRepository.findByPersonal(empleado)).thenReturn(Optional.of(unidad));
+
+        Optional<UnidadDeVenta> resultado = service.traerUnidadDelUsuario("empleado@test.com");
+
+        assertSame(unidad, resultado.orElseThrow());
+    }
+
+    @Test
+    void devuelveVacioSiElUsuarioNoTieneUnidad() {
+        when(unidadDeVentaRepository.findByResponsableUsername("admin@test.com")).thenReturn(List.of());
+        when(personalRepository.findByUserUsernameAndBajaFalse("admin@test.com")).thenReturn(List.of());
+
+        assertTrue(service.traerUnidadDelUsuario("admin@test.com").isEmpty());
     }
 
     private void prepararRegistroExitoso(RegistroUnidadResponsableForm form,

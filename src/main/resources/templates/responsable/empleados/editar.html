@@ -19,6 +19,9 @@
         <div class="card shadow-sm">
             <div class="card-body p-4">
                 <h1 class="h3 mb-2">Modificar empleado</h1>
+                <p th:if="${unidad != null}" class="mb-2">
+                    Unidad de venta: <strong th:text="${unidad.nombreComercial}">Unidad</strong>
+                </p>
                 <p class="text-muted mb-4">
                     Actualizá los datos del empleado. El tipo y el email no se pueden modificar.
                 </p>
