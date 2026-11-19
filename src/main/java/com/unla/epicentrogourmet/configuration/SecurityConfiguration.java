@@ -37,6 +37,7 @@ public class SecurityConfiguration {
                     auth.requestMatchers("/admin/**").hasRole("ADMIN");
                     auth.requestMatchers("/responsable/**").hasRole("RESPONSABLE");
                     auth.requestMatchers("/empleado/**").hasRole("EMPLEADO");
+                    auth.requestMatchers("/api/**", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll();
                     auth.anyRequest().authenticated();
                 })
                 .formLogin(login -> {
