@@ -24,3 +24,9 @@ spring:
           auth: true
           starttls:
             enable: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
