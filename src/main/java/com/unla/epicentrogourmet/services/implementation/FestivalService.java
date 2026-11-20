@@ -1,8 +1,12 @@
 package com.unla.epicentrogourmet.services.implementation;
 
+import com.unla.epicentrogourmet.dto.EstadoFestival;
+import com.unla.epicentrogourmet.dto.FestivalRequestDTO;
+import com.unla.epicentrogourmet.dto.FestivalResponseDTO;
 import com.unla.epicentrogourmet.dto.RankingUnidadDTO;
 import com.unla.epicentrogourmet.dto.ReporteMayoresCanonDTO;
 import com.unla.epicentrogourmet.dto.ReporteVentaDTO;
+import com.unla.epicentrogourmet.entities.Costo;
 import com.unla.epicentrogourmet.entities.Festival;
 import com.unla.epicentrogourmet.entities.UnidadDeVenta;
 import com.unla.epicentrogourmet.exceptions.ReporteResponsableException;
@@ -17,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -143,5 +148,118 @@ public class FestivalService implements IFestivalService {
                     i + 1, r.codigo(), r.nombreComercial(), r.tipo(), r.canon()));
         }
         return mayores;
+    }
+
+    // API REST (Hito 3)
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<FestivalResponseDTO> filtrar(String nombre, LocalDate desde, LocalDate hasta,
+                                             EstadoFestival estado) {
+        if (desde != null && hasta != null && desde.isAfter(hasta)) {
+            throw new IllegalArgumentException("La fecha 'desde' (" + desde
+                    + ") no puede ser posterior a la fecha 'hasta' (" + hasta + ").");
+        }
+        LocalDate hoy = LocalDate.now();
+        String nombreBuscado = (nombre == null || nombre.isBlank())
+                ? null
+                : nombre.trim().toLowerCase(Locale.ROOT);
+
+        return festivalRepository.findAllByOrderByFechaInicioAsc().stream()
+                .filter(f -> nombreBuscado == null
+                        || f.getNombre().toLowerCase(Locale.ROOT).contains(nombreBuscado))
+                // se solapa con el rango [desde, hasta]
+                .filter(f -> desde == null || !f.getFechaFin().isBefore(desde))
+                .filter(f -> hasta == null || !f.getFechaInicio().isAfter(hasta))
+                .filter(f -> estado == null || calcularEstado(f, hoy) == estado)
+                .map(f -> aResponse(f, hoy))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public FestivalResponseDTO alta(FestivalRequestDTO request) {
+        if (request.nombre() == null || request.nombre().isBlank()) {
+            throw new IllegalArgumentException("El nombre del festival es obligatorio.");
+        }
+        if (request.fechaInicio() == null || request.fechaFin() == null) {
+            throw new IllegalArgumentException("Las fechas de inicio y fin son obligatorias.");
+        }
+        if (request.fechaFin().isBefore(request.fechaInicio())) {
+            throw new IllegalArgumentException(
+                    "La fecha de fin no puede ser anterior a la fecha de inicio.");
+        }
+        validarMayorACero("costoSuperficie", request.costoSuperficie());
+        validarNoNegativo("costoMontaje", request.costoMontaje());
+        validarMayorACero("plusElectricidad", request.plusElectricidad());
+        validarMayorACero("sueldoBase", request.sueldoBase());
+        validarNoNegativo("plusAntiguedad", request.plusAntiguedad());
+        validarMayorACero("plusCocinero", request.plusCocinero());
+        validarMayorACero("plusAyudante", request.plusAyudante());
+        validarMayorACero("plusLavaplatos", request.plusLavaplatos());
+
+        String nombre = request.nombre().trim();
+        if (festivalRepository.existsByNombreIgnorandoMayusculasYEspacios(nombre)) {
+            throw new IllegalArgumentException("Ya existe un festival con el nombre '" + nombre + "'.");
+        }
+
+        Costo costo = new Costo();
+        costo.setCostoSuperficie(request.costoSuperficie());
+        costo.setCostoMontaje(request.costoMontaje());
+        costo.setPlusElectricidad(request.plusElectricidad());
+        costo.setSueldoBase(request.sueldoBase());
+        costo.setPlusAntiguedad(request.plusAntiguedad());
+        costo.setPlusCocinero(request.plusCocinero());
+        costo.setPlusAyudante(request.plusAyudante());
+        costo.setPlusLavaplatos(request.plusLavaplatos());
+
+        Festival festival = new Festival();
+        festival.setNombre(nombre);
+        festival.setFechaInicio(request.fechaInicio());
+        festival.setFechaFin(request.fechaFin());
+        festival.setCosto(costo); // se guarda en cascada
+
+        return aResponse(festivalRepository.save(festival), LocalDate.now());
+    }
+
+    private EstadoFestival calcularEstado(Festival festival, LocalDate hoy) {
+        if (festival.estaActivo(hoy)) {
+            return EstadoFestival.EN_CURSO;
+        }
+        return hoy.isBefore(festival.getFechaInicio())
+                ? EstadoFestival.PROXIMO
+                : EstadoFestival.FINALIZADO;
+    }
+
+    private FestivalResponseDTO aResponse(Festival festival, LocalDate hoy) {
+        Costo costo = festival.getCosto();
+        return new FestivalResponseDTO(
+                festival.getId(),
+                festival.getNombre(),
+                festival.getFechaInicio(),
+                festival.getFechaFin(),
+                festival.calcularDuracionDias(),
+                calcularEstado(festival, hoy),
+                festival.getUnidades().size(),
+                costo.getCostoSuperficie(),
+                costo.getCostoMontaje(),
+                costo.getPlusElectricidad(),
+                costo.getSueldoBase(),
+                costo.getPlusAntiguedad(),
+                costo.getPlusCocinero(),
+                costo.getPlusAyudante(),
+                costo.getPlusLavaplatos());
+    }
+
+    private void validarMayorACero(String campo, Float valor) {
+        if (valor == null || valor <= 0) {
+            throw new IllegalArgumentException("El campo " + campo + " debe ser mayor a 0.");
+        }
+    }
+
+    private void validarNoNegativo(String campo, Float valor) {
+        if (valor == null || valor < 0) {
+            throw new IllegalArgumentException("El campo " + campo + " debe ser mayor o igual a 0.");
+        }
     }
 }
