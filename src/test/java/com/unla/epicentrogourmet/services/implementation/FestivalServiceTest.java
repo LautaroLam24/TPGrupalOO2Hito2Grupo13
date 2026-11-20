@@ -1,5 +1,8 @@
 package com.unla.epicentrogourmet.services.implementation;
 
+import com.unla.epicentrogourmet.dto.EstadoFestival;
+import com.unla.epicentrogourmet.dto.FestivalRequestDTO;
+import com.unla.epicentrogourmet.dto.FestivalResponseDTO;
 import com.unla.epicentrogourmet.dto.RankingUnidadDTO;
 import com.unla.epicentrogourmet.dto.ReporteMayoresCanonDTO;
 import com.unla.epicentrogourmet.dto.ReporteVentaDTO;
@@ -14,6 +17,9 @@ import com.unla.epicentrogourmet.repositories.IPedidoRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.jpa.repository.Query;
@@ -30,6 +36,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -452,5 +460,271 @@ class FestivalServiceTest {
         when(reporteResponsableService.autorizarFestival(USERNAME, FESTIVAL_ID))
                 .thenReturn(new ReporteResponsableService.ContextoFestivalAutorizado(
                         unidadResponsable, festival));
+    }
+
+    // ---------------------------------------------------------------
+    // API REST (Hito 3): alta de festival
+    // ---------------------------------------------------------------
+
+    @Test
+    void altaCorrectaGuardaFestivalConCostosYDevuelveDto() {
+        LocalDate inicio = LocalDate.now().plusDays(30);
+        when(festivalRepository.existsByNombreIgnorandoMayusculasYEspacios("Festival de Otoño"))
+                .thenReturn(false);
+        when(festivalRepository.save(any(Festival.class))).thenAnswer(invocacion -> {
+            Festival guardado = invocacion.getArgument(0);
+            guardado.setId(50);
+            return guardado;
+        });
+
+        FestivalResponseDTO respuesta = service.alta(
+                request("  Festival de Otoño  ", inicio, inicio.plusDays(4)));
+
+        ArgumentCaptor<Festival> captor = ArgumentCaptor.forClass(Festival.class);
+        verify(festivalRepository).save(captor.capture());
+        Festival guardado = captor.getValue();
+        assertAll(
+                () -> assertEquals("Festival de Otoño", guardado.getNombre()),
+                () -> assertEquals(inicio, guardado.getFechaInicio()),
+                () -> assertEquals(500f, guardado.getCosto().getCostoSuperficie()),
+                () -> assertEquals(50000f, guardado.getCosto().getPlusLavaplatos()),
+                () -> assertEquals(50, respuesta.id()),
+                () -> assertEquals("Festival de Otoño", respuesta.nombre()),
+                () -> assertEquals(5, respuesta.duracionDias()),
+                () -> assertEquals(EstadoFestival.PROXIMO, respuesta.estado()),
+                () -> assertEquals(0, respuesta.cantidadUnidades()),
+                () -> assertEquals(10f, respuesta.costoMontaje()),
+                () -> assertEquals(150000f, respuesta.plusCocinero()));
+        verifyNoInteractions(reporteResponsableService, pedidoRepository);
+    }
+
+    @Test
+    void altaConFechaFinAnteriorAFechaInicioLanzaExcepcionYNoGuarda() {
+        LocalDate inicio = LocalDate.now().plusDays(30);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.alta(request("Festival de Otoño", inicio, inicio.minusDays(1))));
+
+        assertEquals("La fecha de fin no puede ser anterior a la fecha de inicio.", ex.getMessage());
+        verifyNoInteractions(festivalRepository);
+    }
+
+    @Test
+    void altaDeUnSoloDiaEsValida() {
+        LocalDate dia = LocalDate.now().plusDays(10);
+        when(festivalRepository.save(any(Festival.class))).thenAnswer(i -> i.getArgument(0));
+
+        assertEquals(1, service.alta(request("Festival Express", dia, dia)).duracionDias());
+    }
+
+    @Test
+    void altaConNombreRepetidoConOtrasMayusculasYEspaciosLanzaExcepcion() {
+        LocalDate inicio = LocalDate.now().plusDays(30);
+        when(festivalRepository.existsByNombreIgnorandoMayusculasYEspacios("festival SUR"))
+                .thenReturn(true);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.alta(request("   festival SUR ", inicio, inicio.plusDays(2))));
+
+        assertEquals("Ya existe un festival con el nombre 'festival SUR'.", ex.getMessage());
+        verify(festivalRepository, never()).save(any());
+    }
+
+    @Test
+    void jpqlDeNombreRepetidoIgnoraMayusculasYEspaciosDeLosCostados() throws NoSuchMethodException {
+        Method metodo = IFestivalRepository.class.getMethod(
+                "existsByNombreIgnorandoMayusculasYEspacios", String.class);
+        String jpql = metodo.getAnnotation(Query.class).value()
+                .replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+
+        assertTrue(jpql.contains("where lower(trim(f.nombre)) = lower(trim(:nombre))"));
+    }
+
+    @ParameterizedTest(name = "{0} = {1} se rechaza")
+    @CsvSource({
+            "costoSuperficie, 0", "costoSuperficie, -1",
+            "plusElectricidad, 0", "plusElectricidad, -100",
+            "sueldoBase, 0", "sueldoBase, -1",
+            "plusCocinero, 0", "plusCocinero, -5",
+            "plusAyudante, 0", "plusAyudante, -5",
+            "plusLavaplatos, 0", "plusLavaplatos, -5"
+    })
+    void altaConCostoObligatorioEnCeroONegativoLanzaExcepcion(String campo, float valor) {
+        LocalDate inicio = LocalDate.now().plusDays(30);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.alta(requestConCosto(campo, valor, inicio)));
+
+        assertEquals("El campo " + campo + " debe ser mayor a 0.", ex.getMessage());
+        verifyNoInteractions(festivalRepository);
+    }
+
+    @ParameterizedTest(name = "{0} negativo se rechaza")
+    @CsvSource({"costoMontaje", "plusAntiguedad"})
+    void altaConCostoMontajeOPlusAntiguedadNegativoLanzaExcepcion(String campo) {
+        LocalDate inicio = LocalDate.now().plusDays(30);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.alta(requestConCosto(campo, -1f, inicio)));
+
+        assertEquals("El campo " + campo + " debe ser mayor o igual a 0.", ex.getMessage());
+        verifyNoInteractions(festivalRepository);
+    }
+
+    @Test
+    void altaAceptaCostoMontajeYPlusAntiguedadEnCero() {
+        LocalDate inicio = LocalDate.now().plusDays(30);
+        FestivalRequestDTO base = request("Festival Sin Montaje", inicio, inicio.plusDays(1));
+        FestivalRequestDTO conCeros = new FestivalRequestDTO(base.nombre(), base.fechaInicio(),
+                base.fechaFin(), 500f, 0f, 2000f, 100000f, 0f, 150000f, 100000f, 50000f);
+        when(festivalRepository.save(any(Festival.class))).thenAnswer(i -> i.getArgument(0));
+
+        FestivalResponseDTO respuesta = service.alta(conCeros);
+
+        assertEquals(0f, respuesta.costoMontaje());
+        assertEquals(0f, respuesta.plusAntiguedad());
+    }
+
+    // ---------------------------------------------------------------
+    // API REST (Hito 3): filtros del listado
+    // ---------------------------------------------------------------
+
+    @Test
+    void filtrarSinFiltrosDevuelveTodosEnElOrdenDelRepositorio() {
+        prepararFestivalesParaFiltrar();
+
+        List<FestivalResponseDTO> resultado = service.filtrar(null, null, null, null);
+
+        assertEquals(List.of("Festival de Verano", "Festival Primavera Gourmet",
+                "Primavera Criolla", "Festival del Invierno"), nombres(resultado));
+    }
+
+    @Test
+    void filtrarCalculaEstadoDuracionYCantidadDeUnidades() {
+        prepararFestivalesParaFiltrar();
+
+        List<FestivalResponseDTO> resultado = service.filtrar(null, null, null, null);
+
+        assertAll(
+                () -> assertEquals(EstadoFestival.FINALIZADO, resultado.get(0).estado()),
+                () -> assertEquals(EstadoFestival.EN_CURSO, resultado.get(1).estado()),
+                () -> assertEquals(EstadoFestival.PROXIMO, resultado.get(2).estado()),
+                () -> assertEquals(5, resultado.get(1).duracionDias()),
+                () -> assertEquals(2, resultado.get(1).cantidadUnidades()),
+                () -> assertEquals(500f, resultado.get(1).costoSuperficie()));
+    }
+
+    @Test
+    void filtrarPorNombreEsContieneYNoDistingueMayusculas() {
+        prepararFestivalesParaFiltrar();
+
+        List<FestivalResponseDTO> resultado = service.filtrar("  PRIMAVERA ", null, null, null);
+
+        assertEquals(List.of("Festival Primavera Gourmet", "Primavera Criolla"), nombres(resultado));
+    }
+
+    @Test
+    void filtrarPorRangoDevuelveLosFestivalesQueSeSolapanIncluyendoBordes() {
+        prepararFestivalesParaFiltrar();
+        LocalDate hoy = LocalDate.now();
+
+        // [hoy+2, hoy+30]: toca el último día del que está en curso y el primero del próximo.
+        List<FestivalResponseDTO> resultado = service.filtrar(null, hoy.plusDays(2), hoy.plusDays(30), null);
+
+        assertEquals(List.of("Festival Primavera Gourmet", "Primavera Criolla"), nombres(resultado));
+    }
+
+    @Test
+    void filtrarSoloConDesdeOSoloConHastaUsaRangoAbierto() {
+        prepararFestivalesParaFiltrar();
+        LocalDate hoy = LocalDate.now();
+
+        assertEquals(List.of("Primavera Criolla", "Festival del Invierno"),
+                nombres(service.filtrar(null, hoy.plusDays(3), null, null)));
+        assertEquals(List.of("Festival de Verano"),
+                nombres(service.filtrar(null, null, hoy.minusDays(3), null)));
+    }
+
+    @Test
+    void filtrarPorEstadoUsaLaFechaDeHoy() {
+        prepararFestivalesParaFiltrar();
+
+        assertEquals(List.of("Festival Primavera Gourmet"),
+                nombres(service.filtrar(null, null, null, EstadoFestival.EN_CURSO)));
+        assertEquals(List.of("Primavera Criolla", "Festival del Invierno"),
+                nombres(service.filtrar(null, null, null, EstadoFestival.PROXIMO)));
+        assertEquals(List.of("Festival de Verano"),
+                nombres(service.filtrar(null, null, null, EstadoFestival.FINALIZADO)));
+    }
+
+    @Test
+    void filtrarCombinandoNombreRangoYEstado() {
+        prepararFestivalesParaFiltrar();
+        LocalDate hoy = LocalDate.now();
+
+        List<FestivalResponseDTO> resultado = service.filtrar(
+                "primavera", hoy.minusDays(10), hoy.plusDays(100), EstadoFestival.PROXIMO);
+
+        assertEquals(List.of("Primavera Criolla"), nombres(resultado));
+    }
+
+    @Test
+    void filtrarSinCoincidenciasDevuelveListaVacia() {
+        prepararFestivalesParaFiltrar();
+
+        assertTrue(service.filtrar("otoño", null, null, null).isEmpty());
+    }
+
+    @Test
+    void filtrarConDesdePosteriorAHastaLanzaExcepcionSinConsultarElRepositorio() {
+        LocalDate desde = LocalDate.of(2026, 12, 31);
+        LocalDate hasta = LocalDate.of(2026, 1, 1);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.filtrar(null, desde, hasta, null));
+
+        assertEquals("La fecha 'desde' (2026-12-31) no puede ser posterior a la fecha 'hasta' (2026-01-01).",
+                ex.getMessage());
+        verifyNoInteractions(festivalRepository);
+    }
+
+    private void prepararFestivalesParaFiltrar() {
+        LocalDate hoy = LocalDate.now();
+        Festival enCurso = festivalApi(2, "Festival Primavera Gourmet", hoy.minusDays(2), hoy.plusDays(2));
+        enCurso.getUnidades().add(unidadResponsable);
+        enCurso.getUnidades().add(puesto(11, "PDS0000001", "La Carpa Criolla"));
+        when(festivalRepository.findAllByOrderByFechaInicioAsc()).thenReturn(List.of(
+                festivalApi(1, "Festival de Verano", hoy.minusDays(60), hoy.minusDays(55)),
+                enCurso,
+                festivalApi(3, "Primavera Criolla", hoy.plusDays(30), hoy.plusDays(33)),
+                festivalApi(4, "Festival del Invierno", hoy.plusDays(90), hoy.plusDays(95))));
+    }
+
+    private Festival festivalApi(int id, String nombre, LocalDate inicio, LocalDate fin) {
+        Festival f = new Festival();
+        f.setId(id);
+        f.setNombre(nombre);
+        f.setFechaInicio(inicio);
+        f.setFechaFin(fin);
+        f.setCosto(costo());
+        return f;
+    }
+
+    private List<String> nombres(List<FestivalResponseDTO> festivales) {
+        return festivales.stream().map(FestivalResponseDTO::nombre).toList();
+    }
+
+    private FestivalRequestDTO request(String nombre, LocalDate inicio, LocalDate fin) {
+        return new FestivalRequestDTO(nombre, inicio, fin,
+                500f, 10f, 2000f, 100000f, 5000f, 150000f, 100000f, 50000f);
+    }
+
+    private FestivalRequestDTO requestConCosto(String campo, float valor, LocalDate inicio) {
+        float[] c = {500f, 10f, 2000f, 100000f, 5000f, 150000f, 100000f, 50000f};
+        List<String> campos = List.of("costoSuperficie", "costoMontaje", "plusElectricidad", "sueldoBase",
+                "plusAntiguedad", "plusCocinero", "plusAyudante", "plusLavaplatos");
+        c[campos.indexOf(campo)] = valor;
+        return new FestivalRequestDTO("Festival de Otoño", inicio, inicio.plusDays(2),
+                c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7]);
     }
 }

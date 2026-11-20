@@ -47,4 +47,11 @@ public interface IFestivalRepository extends JpaRepository<Festival, Integer> {
             order by u.codigo asc
             """)
     List<UnidadDeVenta> findUnidadesByFestivalId(@Param("festivalId") int festivalId);
+
+    @Query("""
+            select case when count(f) > 0 then true else false end
+            from Festival f
+            where lower(trim(f.nombre)) = lower(trim(:nombre))
+            """)
+    boolean existsByNombreIgnorandoMayusculasYEspacios(@Param("nombre") String nombre);
 }
